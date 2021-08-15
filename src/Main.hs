@@ -33,6 +33,7 @@ import Data.List (transpose)
 
 ----------------------- TYPES ----------------------- 
 
+-- | Data type listing all the types in Supercell
 data Type
     = TNum
     | TBool
@@ -60,17 +61,18 @@ data Value
     | VList [Value]
     deriving (Show, Eq)
 
+-- | Operators
 data Op
-    = OPlus
-    | OMinus
-    | OTimes
-    | ODiv
-    | OEq
-    | ONeq
-    | OGt
-    | OLt
-    | OAnd
-    | OOr
+    = OPlus     -- ^ Plus
+    | OMinus    -- ^ Minus
+    | OTimes    -- ^ Times
+    | ODiv      -- ^ Division
+    | OEq       -- ^ Equals
+    | ONeq      -- ^ Not Equals
+    | OGt       -- ^ Greater Than
+    | OLt       -- ^ Less Than
+    | OAnd      -- ^ Logical And
+    | OOr       -- ^ Logical Or
     deriving (Show)
 
 data ExprF r
