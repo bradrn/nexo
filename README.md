@@ -1,1 +1,35 @@
 # supercell
+
+## Tips and Tricks and how to compile our Haskell code
+
+### Running the compiler / interpreter
+
+- `stack build` - to build the Supercell source code
+- `stack ghci` - runs the interpreter in interactive mode
+- `stack ghc` - runs the compiler on a single file only (not used in this project)
+
+### Running the program
+
+- `stack exec` - runs the last compiled version of Supercell
+- `stack run` - builds the latest version of the Supercell source code, then runs the compiled executable (same as `stack build` followed by `stack exec`)
+
+### Troubleshooting compiler errors
+
+When building Supercell for the first time you might see the following error:
+
+```
+--  While building package regex-posix-0.96.0.0 (scroll up to its section to see the error) using:
+      C:\sr\setup-exe-cache\x86_64-windows\Cabal-simple_Z6RU0evB_3.2.1.0_ghc-8.10.4.exe --builddir=.stack-work\dist\274b403a build --ghc-options " -fdiagnostics-color=always"
+    Process exited with code: ExitFailure 1
+```
+
+This can be fixed by running the following commands, exactly as written and in order:
+
+```
+stack --resolver lts-18.1 exec -- ghc-pkg unregister regex-posix-0.96.0.0 --force
+stack build regex-posix-0.96.0.0 --flag regex-posix:_regex-posix-clib --resolver lts-18.1
+```
+
+(The first command can sometimes give an error. This error is safe to ignore; simply continue on with the second command.)
+
+After running the two commands above, commands such as `stack build` or `stack run` should complete successfully and without error.
