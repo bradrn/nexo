@@ -296,11 +296,11 @@ typecheck lookupName = cata \case
 ----------------------- INTERPRETER ----------------------- 
 
 evalApp :: Either Op String -> [Value] -> Value
-evalApp (Right "If") [cond, tcase, fcase] = case cond of
+evalApp (Right "If") [cond, tcase, fcase] = case cond of -- If logical Function
     VBool True -> tcase
     VBool False -> fcase
     _ -> error "evalFun: bug in typechecker"
-evalApp (Right "List") vs = VList vs
+evalApp (Right "List") vs = VList vs                    -- List function used by Haskell for making lists
 evalApp (Left OPlus ) [VNum i1, VNum i2] = VNum $ i1 + i2
 evalApp (Left OMinus) [VNum i1, VNum i2] = VNum $ i1 - i2
 evalApp (Left OTimes) [VNum i1, VNum i2] = VNum $ i1 * i2
