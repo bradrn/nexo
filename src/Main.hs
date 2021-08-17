@@ -285,10 +285,9 @@ typecheck lookupName = cata \case
     subst ss (t : ts) = t : subst ss ts
 
     match :: MonadFail f => Type -> Type -> f Int
+    match t t' | t == t' = pure 0
     match (TList t) t' = (1+) <$> match t t'
-    match t t'
-        | t == t' = pure 0
-        | otherwise = fail "#TYPE"
+    match _ _ = fail "#TYPE"
 
     liftBy :: Int -> Type -> Type
     liftBy 0 t = t
