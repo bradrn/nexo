@@ -33,3 +33,14 @@ stack build regex-posix-0.96.0.0 --flag regex-posix:_regex-posix-clib --resolver
 (The first command can sometimes give an error. This error is safe to ignore; simply continue on with the second command.)
 
 After running the two commands above, commands such as `stack build` or `stack run` should complete successfully and without error.
+
+## How to run the UI
+
+Here are the fields in the GUI:
+
+| Field name | Contents |
+| --- | --- |
+| Name | Name of variable |
+| Type | Type of variable (e.g. `TNum`, `TBool`, `TList(something)`) |
+| Expr | eg. `1+1` or `Mean([1,5,10])` or `If(1=1,10,20)` |
+| Value | Result returned |
