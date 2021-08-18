@@ -238,6 +238,7 @@ typecheck lookupName = cata \case
   where
     fntype "If" = pure $ FunType [TBool, TVar "a", TVar "a"] (TVar "a")
     fntype "Mean" = pure $ FunType [TList TNum] TNum
+    fntype "PopStdDev" = pure $ FunType [TList TNum] TNum
     fntype _ = fail "#NAME"
 
     optype OEq    = pure $ FunType [TVar "a", TVar "a"] (TVar "a")
@@ -300,12 +301,23 @@ extractNum :: Value -> Double
 extractNum (VNum n) = n
 extractNum _ = error "unexpected value"
 
+mean :: [Double] -> Double
+mean list = sum list / fromIntegral (length list)  -- same as VNum (sum (map extractNum list) / fromIntegral (length list))
+
+popStdDev :: [Double] -> Double
+popStdDev list =
+    let mu = mean list
+        diffSquared = map (^2) (map (subtract mu) list)
+        meanSquared = mean diffSquared
+    in sqrt meanSquared
+
 evalApp :: Either Op String -> [Value] -> Value
 evalApp (Right "If") [cond, tcase, fcase] = case cond of -- If logical Function
     VBool True -> tcase
     VBool False -> fcase
     _ -> error "evalFun: bug in typechecker"
-evalApp (Right "Mean") [VList list] = VNum $ sum (map extractNum list) / fromIntegral (length list)  -- same as VNum (sum (map extractNum list) / fromIntegral (length list))
+evalApp (Right "Mean") [VList list] = VNum $ mean (map extractNum list)
+evalApp (Right "PopStdDev") [VList list] = VNum $ popStdDev (map extractNum list)
 evalApp (Right "List") vs = VList vs                    -- List function used by Haskell for making lists
 evalApp (Left OPlus ) [VNum i1, VNum i2] = VNum $ i1 + i2
 evalApp (Left OMinus) [VNum i1, VNum i2] = VNum $ i1 - i2
