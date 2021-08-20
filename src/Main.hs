@@ -29,7 +29,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Monad.Trans (lift)
 import Data.Maybe (listToMaybe, catMaybes)
 import Control.Monad (zipWithM)
-import Data.List (transpose)
+import Data.List (transpose, sort)
 
 ----------------------- TYPES ----------------------- 
 
@@ -240,6 +240,7 @@ typecheck lookupName = cata \case
     fntype "Mean" = pure $ FunType [TList TNum] TNum
     fntype "Avg"  = pure $ FunType [TList TNum] TNum
     fntype "PopStdDev" = pure $ FunType [TList TNum] TNum
+    fntype "Median" = pure $ FunType [TList TNum] TNum
     fntype _ = fail "#NAME"
 
     optype OEq    = pure $ FunType [TVar "a", TVar "a"] (TVar "a")
@@ -312,6 +313,16 @@ popStdDev list =
         meanSquared = mean diffSquared
     in sqrt meanSquared
 
+median :: [Double] -> Double
+median list = 
+    let sortList = sort list
+        x = sortList !! (length sortList `quot` 2)
+        y = sortList !! ((length sortList `quot` 2) - 1)
+    in
+        if odd (length sortList)
+        then x
+        else (x + y) / 2
+
 evalApp :: Either Op String -> [Value] -> Value
 evalApp (Right "If") [cond, tcase, fcase] = case cond of -- If logical Function
     VBool True -> tcase
@@ -320,6 +331,7 @@ evalApp (Right "If") [cond, tcase, fcase] = case cond of -- If logical Function
 evalApp (Right "Mean") [VList list] = VNum $ mean (map extractNum list)
 evalApp (Right "Avg") [VList list] = VNum $ mean (map extractNum list)
 evalApp (Right "PopStdDev") [VList list] = VNum $ popStdDev (map extractNum list)
+evalApp (Right "Median") [VList list] = VNum $ median (map extractNum list)
 evalApp (Right "List") vs = VList vs                    -- List function used by Haskell for making lists
 evalApp (Left OPlus ) [VNum i1, VNum i2] = VNum $ i1 + i2
 evalApp (Left OMinus) [VNum i1, VNum i2] = VNum $ i1 - i2
