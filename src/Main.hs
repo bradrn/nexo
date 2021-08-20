@@ -238,6 +238,7 @@ typecheck lookupName = cata \case
   where
     fntype "If" = pure $ FunType [TBool, TVar "a", TVar "a"] (TVar "a")
     fntype "Mean" = pure $ FunType [TList TNum] TNum
+    fntype "Avg"  = pure $ FunType [TList TNum] TNum
     fntype "PopStdDev" = pure $ FunType [TList TNum] TNum
     fntype _ = fail "#NAME"
 
@@ -317,6 +318,7 @@ evalApp (Right "If") [cond, tcase, fcase] = case cond of -- If logical Function
     VBool False -> fcase
     _ -> error "evalFun: bug in typechecker"
 evalApp (Right "Mean") [VList list] = VNum $ mean (map extractNum list)
+evalApp (Right "Avg") [VList list] = VNum $ mean (map extractNum list)
 evalApp (Right "PopStdDev") [VList list] = VNum $ popStdDev (map extractNum list)
 evalApp (Right "List") vs = VList vs                    -- List function used by Haskell for making lists
 evalApp (Left OPlus ) [VNum i1, VNum i2] = VNum $ i1 + i2
