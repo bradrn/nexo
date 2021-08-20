@@ -241,6 +241,7 @@ typecheck lookupName = cata \case
     fntype "Avg"  = pure $ FunType [TList TNum] TNum
     fntype "PopStdDev" = pure $ FunType [TList TNum] TNum
     fntype "Median" = pure $ FunType [TList TNum] TNum
+    fntype "Mode" = pure $ FunType [TList TNum] TNum
     fntype _ = fail "#NAME"
 
     optype OEq    = pure $ FunType [TVar "a", TVar "a"] (TVar "a")
@@ -323,6 +324,14 @@ median list =
         then x
         else (x + y) / 2
 
+mode :: Ord a => [a] -> a
+mode = getMostFrequent . foldr (\val -> Map.insertWith (+) val 1) Map.empty
+  where
+    getMostFrequent :: Ord a => Map.Map a Int -> a
+    getMostFrequent freqs =
+        let highestFreq = maximum $ Map.elems freqs
+        in head $ Map.keys $ Map.filter (==highestFreq) freqs
+
 evalApp :: Either Op String -> [Value] -> Value
 evalApp (Right "If") [cond, tcase, fcase] = case cond of -- If logical Function
     VBool True -> tcase
@@ -332,6 +341,7 @@ evalApp (Right "Mean") [VList list] = VNum $ mean (map extractNum list)
 evalApp (Right "Avg") [VList list] = VNum $ mean (map extractNum list)
 evalApp (Right "PopStdDev") [VList list] = VNum $ popStdDev (map extractNum list)
 evalApp (Right "Median") [VList list] = VNum $ median (map extractNum list)
+evalApp (Right "Mode") [VList list] = VNum $ mode (map extractNum list)
 evalApp (Right "List") vs = VList vs                    -- List function used by Haskell for making lists
 evalApp (Left OPlus ) [VNum i1, VNum i2] = VNum $ i1 + i2
 evalApp (Left OMinus) [VNum i1, VNum i2] = VNum $ i1 - i2
