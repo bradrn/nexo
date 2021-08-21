@@ -20,8 +20,8 @@ import Data.IORef
 import Data.Void ( Void )
 import Data.Deriving (deriveShow1)
 import Graphics.UI.Threepenny.Core hiding (many)
-import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try )
-import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar )
+import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill )
+import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )
 
 import qualified Data.Map.Strict as Map
 import qualified Graphics.UI.Threepenny as UI
@@ -37,6 +37,7 @@ import Data.List (transpose, sort)
 data Type
     = TNum
     | TBool
+    | TText
     | TVar TVar
     -- | TFun FunType
     | TList Type
@@ -59,6 +60,7 @@ meets = foldr (\val acc -> acc >>= meet val) =<< listToMaybe
 data Value
     = VNum Double
     | VBool Bool
+    | VText String
     | VList [Value]
     | VRecord (Map.Map String Value)
     deriving (Show, Eq)
@@ -164,13 +166,19 @@ pRecordSpec p = fmap Map.fromList $ ((,) <$> pIdentifier <* symbol ":" <*> p) `s
 pType :: Parser Type
 pType = TNum <$ symbol "Num"
     <|> TBool <$ symbol "Bool"
+    <|> TText <$ symbol "Text"
     <|> TRecord <$> paren (pRecordSpec pType)
     <|> TList <$> (symbol "List" *> pType)
 
 pValue :: Parser Value
-pValue = VNum <$> lexeme L.decimal <|> VBool <$> pBool
+pValue = VNum <$> lexeme L.decimal
+    <|> VBool <$> pBool
+    <|> VText <$> lexeme pString
   where
     pBool = True <$ symbol "True" <|> False <$ symbol "False"
+
+    pString :: Parser String
+    pString = char '"' *> (L.charLiteral `manyTill` char '"')
 
 operatorTable :: [[Operator Parser Expr]]
 operatorTable =
@@ -225,6 +233,7 @@ typecheck lookupName = cata \case
         case v of
             VNum _ -> TNum
             VBool _ -> TBool
+            VText _ -> TText
             VRecord _ -> error "typecheck: bug in parser"
             VList   _ -> error "typecheck: bug in parser"
     XList vs -> do
