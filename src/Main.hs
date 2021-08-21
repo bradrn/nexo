@@ -40,6 +40,7 @@ data Type
     | TVar TVar
     -- | TFun FunType
     | TList Type
+    | TRecord (Map.Map String Type)
     deriving (Show, Eq, Ord)
 
 type TVar = String
@@ -59,6 +60,7 @@ data Value
     = VNum Double
     | VBool Bool
     | VList [Value]
+    | VRecord (Map.Map String Value)
     deriving (Show, Eq)
 
 -- | Operators
@@ -78,6 +80,7 @@ data Op
 data ExprF r
     = XLit Value
     | XList [r]
+    | XRecord (Map.Map String r)
     | XVar String
     | XFun String [r]
     | XOp Op r r
@@ -148,12 +151,20 @@ lexeme = L.lexeme sc
 symbol :: String -> Parser String
 symbol = L.symbol sc
 
+paren, sqparen :: Parser a -> Parser a
+paren   = between (symbol "(") (symbol ")")
+sqparen = between (symbol "[") (symbol "]")
+
 pIdentifier :: Parser String
 pIdentifier = lexeme $ (:) <$> letterChar <*> many (alphaNumChar <|> oneOf "_")
+
+pRecordSpec :: Parser a -> Parser (Map.Map String a)
+pRecordSpec p = fmap Map.fromList $ ((,) <$> pIdentifier <* symbol ":" <*> p) `sepBy` symbol ","
 
 pType :: Parser Type
 pType = TNum <$ symbol "Num"
     <|> TBool <$ symbol "Bool"
+    <|> TRecord <$> paren (pRecordSpec pType)
     <|> TList <$> (symbol "List" *> pType)
 
 pValue :: Parser Value
@@ -186,15 +197,13 @@ operatorTable =
 
 pTerm :: Parser Expr
 pTerm = choice
-    [ paren pExpr
+    [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
+    , paren pExpr
     , Fix . XVar <$> pIdentifier
     , Fix . XList <$> sqparen (pExpr `sepBy` symbol ",")
     , Fix . XLit <$> pValue
     ]
-  where
-    paren   = between (symbol "(") (symbol ")")
-    sqparen = between (symbol "[") (symbol "]")
 
 pExpr :: Parser Expr
 pExpr = makeExprParser pTerm operatorTable
@@ -204,6 +213,7 @@ pExpr = makeExprParser pTerm operatorTable
 data CoreExpr
     = CLit Value
     | CVar String
+    | CRec (Map.Map String CoreExpr)
     | CApp (Either Op String) [(Int, CoreExpr)]
     deriving (Show)
 
@@ -215,7 +225,8 @@ typecheck lookupName = cata \case
         case v of
             VNum _ -> TNum
             VBool _ -> TBool
-            VList _ -> error "typecheck: bug in parser"
+            VRecord _ -> error "typecheck: bug in parser"
+            VList   _ -> error "typecheck: bug in parser"
     XList vs -> do
         vs' <- sequenceA vs
         let xs = fst <$> vs'
@@ -223,6 +234,11 @@ typecheck lookupName = cata \case
         case nubOrd ts of
             [t] -> pure (CApp (Right "List") $ (0,) <$> xs, TList t)
             _ -> fail "#TYPE"
+    XRecord kvs -> do
+        kvs' <- sequenceA kvs
+        let xs = fst <$> kvs'
+            ts = snd <$> kvs'
+        pure (CRec xs, TRecord ts)
     XVar v -> (CVar v,) <$> lookupName v
     XFun f vs -> do
         vs' <- sequenceA vs
@@ -388,6 +404,7 @@ evalExpr :: MonadFail f => (String -> f Value) -> CoreExpr -> f Value
 evalExpr lookupName = cata \case
     CLitF v -> pure v
     CVarF name -> lookupName name
+    CRecF xs -> VRecord <$> sequenceA xs
     CAppF fn es -> broadcast (evalApp fn) <$> traverse liftTuple es
   where
     liftTuple :: Functor f => (a, f b) -> f (a, b)
