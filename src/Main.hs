@@ -84,6 +84,7 @@ data ExprF r
     | XList [r]
     | XRecord (Map.Map String r)
     | XVar String
+    | XField r String
     | XFun String [r]
     | XOp Op r r
     deriving (Show, Functor)
@@ -204,7 +205,7 @@ operatorTable =
     wrap e x y = Fix $ e x y
 
 pTerm :: Parser Expr
-pTerm = choice
+pTerm = wrapDot $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
     , paren pExpr
@@ -212,6 +213,11 @@ pTerm = choice
     , Fix . XList <$> sqparen (pExpr `sepBy` symbol ",")
     , Fix . XLit <$> pValue
     ]
+  where
+    wrapDot :: Parser Expr -> Parser Expr
+    wrapDot p = do
+        r <- p
+        (Fix . XField r <$> (symbol "." *> pIdentifier)) <|> pure r
 
 pExpr :: Parser Expr
 pExpr = makeExprParser pTerm operatorTable
@@ -248,6 +254,17 @@ typecheck lookupName = cata \case
         let xs = fst <$> kvs'
             ts = snd <$> kvs'
         pure (CRec xs, TRecord ts)
+    XField r' f -> do
+        (r, tr) <- r'
+        case tr of
+            TRecord fs | Just tf <- Map.lookup f fs
+              -> pure
+                 ( CApp (Right "GetField")
+                        [ (0,r)
+                        , (0,CLit (VText f))
+                        ]
+                 , tf)
+            _ -> fail "#TYPE"
     XVar v -> (CVar v,) <$> lookupName v
     XFun f vs -> do
         vs' <- sequenceA vs
@@ -368,6 +385,8 @@ evalApp (Right "PopStdDev") [VList list] = VNum $ popStdDev (map extractNum list
 evalApp (Right "Median") [VList list] = VNum $ median (map extractNum list)
 evalApp (Right "Mode") [VList list] = VNum $ mode (map extractNum list)
 evalApp (Right "List") vs = VList vs                    -- List function used by Haskell for making lists
+evalApp (Right "GetField") [VRecord r, VText f]
+    | Just v <- Map.lookup f r = v
 evalApp (Left OPlus ) [VNum i1, VNum i2] = VNum $ i1 + i2
 evalApp (Left OMinus) [VNum i1, VNum i2] = VNum $ i1 - i2
 evalApp (Left OTimes) [VNum i1, VNum i2] = VNum $ i1 * i2
