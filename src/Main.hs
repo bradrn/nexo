@@ -258,6 +258,7 @@ typecheck lookupName = cata \case
     fntype "PopStdDev" = pure $ FunType [TList TNum] TNum
     fntype "Median" = pure $ FunType [TList TNum] TNum
     fntype "Mode" = pure $ FunType [TList TNum] TNum
+    fntype "Sine" = pure $ FunType [TNum] TNum
     fntype _ = fail "#NAME"
 
     optype OEq    = pure $ FunType [TVar "a", TVar "a"] (TVar "a")
@@ -358,6 +359,7 @@ evalApp (Right "Avg") [VList list] = VNum $ mean (map extractNum list)
 evalApp (Right "PopStdDev") [VList list] = VNum $ popStdDev (map extractNum list)
 evalApp (Right "Median") [VList list] = VNum $ median (map extractNum list)
 evalApp (Right "Mode") [VList list] = VNum $ mode (map extractNum list)
+evalApp (Right "Sine") [VNum n] = VNum $ sin n
 evalApp (Right "List") vs = VList vs                    -- List function used by Haskell for making lists
 evalApp (Left OPlus ) [VNum i1, VNum i2] = VNum $ i1 + i2
 evalApp (Left OMinus) [VNum i1, VNum i2] = VNum $ i1 - i2
