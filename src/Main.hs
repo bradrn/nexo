@@ -173,7 +173,7 @@ pType = TNum <$ symbol "Num"
     <|> TList <$> (symbol "List" *> pType)
 
 pValue :: Parser Value
-pValue = VNum <$> lexeme L.decimal
+pValue = VNum <$> lexeme L.float
     <|> VBool <$> pBool
     <|> VText <$> lexeme pString
   where
