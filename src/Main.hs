@@ -291,6 +291,8 @@ typecheck lookupName = cata \case
     fntype "InvSin" = pure $ FunType [TNum] TNum
     fntype "InvCos" = pure $ FunType [TNum] TNum
     fntype "InvTan" = pure $ FunType [TNum] TNum
+    fntype "Root" = pure $ FunType [TNum, TNum] TNum
+    fntype "Power" = pure $ FunType [TNum, TNum] TNum
     fntype _ = fail "#NAME"
 
     optype OEq    = pure $ FunType [TVar "a", TVar "a"] (TVar "a")
@@ -397,6 +399,8 @@ evalApp (Right "Tan") [VNum n] = VNum $ tan n
 evalApp (Right "InvSin") [VNum n] = VNum $ asin n
 evalApp (Right "InvCos") [VNum n] = VNum $ acos n
 evalApp (Right "InvTan") [VNum n] = VNum $ atan n
+evalApp (Right "Root") [VNum n1, VNum n2] = VNum $ n1**(1/n2)
+evalApp (Right "Power") [VNum n1, VNum n2] = VNum $ n1**n2
 evalApp (Right "List") vs = VList vs                    -- List function used by Haskell for making lists
 evalApp (Right "GetField") [VRecord r, VText f]
     | Just v <- Map.lookup f r = v
