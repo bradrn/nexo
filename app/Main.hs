@@ -14,8 +14,6 @@ import Graphics.UI.Threepenny.Core hiding (many)
 
 import qualified Data.Map.Strict as Map
 import qualified Graphics.UI.Threepenny as UI
-import Data.Maybe (listToMaybe, catMaybes)
-import Data.List (transpose, sort)
 
 import Brassica.Interpret
 

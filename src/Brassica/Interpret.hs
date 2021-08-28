@@ -12,7 +12,6 @@ module Brassica.Interpret
        , Sheet(..)
        , Cell(..)
        , ValueState(..)
-       , cellValue
        , display
        , evalSheet
        , insert
@@ -369,9 +368,12 @@ mean list = sum list / fromIntegral (length list)  -- same as VNum (sum (map ext
 popStdDev :: [Double] -> Double
 popStdDev list =
     let mu = mean list
-        diffSquared = map (^2) (map (subtract mu) list)
+        diffSquared = map (square . subtract mu) list
         meanSquared = mean diffSquared
     in sqrt meanSquared
+  where
+    -- could just do (^2), but that gives a defaulting warning
+    square x = x * x
 
 median :: [Double] -> Double
 median list = 
