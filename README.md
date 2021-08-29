@@ -1,17 +1,11 @@
 # supercell
 
-## Tips and Tricks and how to compile our Haskell code
+## Tips and Tricks and how to compile our code
 
-### Running the compiler / interpreter
-
-- `stack build` - to build the Supercell source code
-- `stack ghci` - runs the interpreter in interactive mode
-- `stack ghc` - runs the compiler on a single file only (not used in this project)
-
-### Running the program
-
-- `stack exec` - runs the last compiled version of Supercell
-- `stack run` - builds the latest version of the Supercell source code, then runs the compiled executable (same as `stack build` followed by `stack exec`)
+To compile the Haskell code, just run `stack build`.
+Then open `./gui/supercell-gui/CMakeLists.txt` in Qt Creator.
+You should then be able to build and run the GUI like any other Qt program.
+You can also run the interactive interpreter on the Haskell code alone by running `stack ghci supercell:lib`.
 
 ### Troubleshooting compiler errors
 
