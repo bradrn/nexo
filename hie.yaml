@@ -1,4 +1,8 @@
 cradle:
   stack:
-    - path: "./src/Main.hs"
+    - path: "./src/"
+      component: "supercell:lib"
+    - path: "./app/"
       component: "supercell:exe:supercell"
+    - path: "./gui/interop/"
+      component: "supercell-interop:lib"

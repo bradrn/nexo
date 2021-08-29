@@ -1,2 +1,12 @@
 .stack-work/
+stub/
 *~
+
+*.autosave
+*.a
+*.core
+*.moc
+*.o
+*.obj
+*.pro.user*
+build-*/
