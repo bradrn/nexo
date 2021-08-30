@@ -1,8 +1,11 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Interop where
 
+import Control.Monad ((<=<))
 import Data.IORef
+import Data.List (genericLength)
 import Foreign
 import Foreign.C hiding (newCString, peekCString) -- hide these so we don't accidentally use them
 import qualified GHC.Foreign as GHC
@@ -53,8 +56,37 @@ hsQuery k ptr successPtr = do
         Nothing -> poke successPtr False >> newStablePtr Invalidated
         Just cl -> poke successPtr True  >> newStablePtr (cellValue cl)
 
-hsDisplay :: StablePtr ValueState -> IO CString
-hsDisplay ptr = GHC.newCString utf8 =<< display <$> deRefStablePtr ptr
+hsDisplayError :: StablePtr ValueState -> IO CString
+hsDisplayError ptr = deRefStablePtr ptr >>= \case
+    ValuePresent _ _ -> GHC.newCString utf8 ""
+    vs -> GHC.newCString utf8 $ display vs
+
+hsExtractTopLevelType :: StablePtr ValueState -> IO CInt
+hsExtractTopLevelType ptr = deRefStablePtr ptr >>= \case
+    ValuePresent t _ -> return $ case t of
+        TNum -> 1
+        TBool -> 2
+        TText -> 3
+        TVar _ -> 4
+        TList _ -> 5
+        TRecord _ -> 6
+    _ -> return 0
+
+hsExtractValue :: StablePtr ValueState -> IO (StablePtr Value)
+hsExtractValue ptr = deRefStablePtr ptr >>= \case
+    ValuePresent _ v -> newStablePtr v
+    _ -> error "hsExtractValue: attempted to get nonexistent value"
+
+hsRenderValue :: StablePtr Value -> IO CString
+hsRenderValue = GHC.newCString utf8 . render <=< deRefStablePtr
+
+hsValueToList :: StablePtr Value -> Ptr CInt -> IO (Ptr (StablePtr Value))
+hsValueToList ptr lptr = deRefStablePtr ptr >>= \case
+    VList vs -> do
+        poke lptr $ genericLength vs
+        vs' <- traverse newStablePtr vs
+        newArray vs'
+    _ -> error "hsValueToList: tried to convert non-list to list"
 
 foreign export ccall hsNewSheet :: IO (StablePtr (IORef Sheet))
 foreign export ccall hsParseExpr :: CString -> Ptr Bool -> IO (StablePtr Expr)
@@ -63,4 +95,8 @@ foreign export ccall hsMkCell :: CString -> StablePtr (Maybe Type) -> StablePtr 
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()
 foreign export ccall hsEvalSheet :: StablePtr (IORef Sheet) -> IO () 
 foreign export ccall hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr Bool -> IO (StablePtr ValueState)
-foreign export ccall hsDisplay :: StablePtr ValueState -> IO CString
+foreign export ccall hsDisplayError :: StablePtr ValueState -> IO CString
+foreign export ccall hsExtractTopLevelType :: StablePtr ValueState -> IO CInt
+foreign export ccall hsExtractValue :: StablePtr ValueState -> IO (StablePtr Value)
+foreign export ccall hsRenderValue :: StablePtr Value -> IO CString
+foreign export ccall hsValueToList :: StablePtr Value -> Ptr CInt -> IO (Ptr (StablePtr Value))

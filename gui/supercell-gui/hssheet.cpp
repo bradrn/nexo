@@ -1,5 +1,6 @@
 #include "Interop_stub.h"
 #include "hssheet.h"
+#include "hsvalue.h"
 
 #include <QString>
 #include <tuple>
@@ -23,12 +24,14 @@ void HsSheet::insertCell(int key, QString name, QString type, QString expr)
     emit reevaluated();
 }
 
-std::optional<QString> HsSheet::queryCell(int key)
+std::variant<std::monostate, QString, HsValue> HsSheet::queryCell(int key)
 {
     bool *qSuccess = new bool();
     HsStablePtr value = hsQuery(key, hsSheet, qSuccess);
     if (!*qSuccess) return {};
 
-    QByteArray out = QByteArray((char*) hsDisplay(value));
-    return QString::fromUtf8(out);
+    if (auto error = (char *) hsDisplayError(value); *error)
+        return QString::fromUtf8(error);
+    else
+        return HsValue(hsExtractValue(value), static_cast<HsValue::ValueType>(hsExtractTopLevelType(value)));
 }

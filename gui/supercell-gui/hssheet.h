@@ -3,8 +3,9 @@
 
 #include <HsFFI.h>
 #include <QWidget>
-#include <optional>
+#include <variant>
 
+class HsValue;
 class QString;
 
 class HsSheet : public QWidget
@@ -14,7 +15,7 @@ public:
     HsSheet();
 
     void insertCell(int key, QString name, QString type, QString expr);
-    std::optional<QString> queryCell(int key);
+    std::variant<std::monostate, QString, HsValue> queryCell(int key);
 
 signals:
     void reevaluated();

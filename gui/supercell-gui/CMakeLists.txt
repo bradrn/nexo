@@ -30,6 +30,8 @@ add_executable(supercell-gui
   hssheet.h
   value.cpp
   value.h
+  hsvalue.cpp
+  hsvalue.h
   ${TS_FILES}
 )
 

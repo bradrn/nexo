@@ -7,13 +7,15 @@
 {-# LANGUAGE TypeFamilies               #-}
 
 module Brassica.Interpret
-       ( Type
+       ( Type(..)
        , Expr
+       , Value(..)
        , zeroExpr
        , Sheet(..)
        , Cell(..)
        , ValueState(..)
        , display
+       , render
        , evalSheet
        , insert
        , parseMaybe
@@ -38,7 +40,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Monad.Trans (lift)
 import Data.Maybe (listToMaybe, catMaybes)
 import Control.Monad (zipWithM)
-import Data.List (transpose, sort)
+import Data.List (transpose, sort, intercalate)
 
 ----------------------- TYPES ----------------------- 
 
@@ -112,8 +114,18 @@ data ValueState
     | Invalidated
     deriving (Show)
 
+render :: Value -> String
+render (VNum n) = show n
+render (VBool b) = show b
+render (VText s) = show s
+render (VList vs) = "[" ++ intercalate "," (render <$> vs) ++ "]"
+render (VRecord vs) =
+    "(" ++ intercalate "," (renderField <$> Map.toList vs) ++ ")"
+  where
+    renderField (k,v) = k ++ ":" ++ render v
+
 display :: ValueState -> String
-display (ValuePresent _ v) = show v
+display (ValuePresent _ v) = render v
 display (ValueError e) = '#' : e
 display Invalidated = "#INVALIDATED"
 

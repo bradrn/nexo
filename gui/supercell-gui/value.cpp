@@ -1,9 +1,13 @@
 #include "hssheet.h"
+#include "hsvalue.h"
 #include "value.h"
 
+#include <QAbstractItemView>
 #include <QGridLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListView>
+#include <QStringListModel>
 
 Value::Value(int key, HsSheet *sheet, QWidget *parent)
     : QWidget(parent)
@@ -11,6 +15,7 @@ Value::Value(int key, HsSheet *sheet, QWidget *parent)
     , sheet(sheet)
 {
     QGridLayout *l = new QGridLayout(this);
+    layout = l;
 
     l->addWidget(new QLabel("Name"), 0, 0);
     l->addWidget(new QLabel("Type"), 1, 0);
@@ -26,14 +31,16 @@ Value::Value(int key, HsSheet *sheet, QWidget *parent)
     exprEdit = new QLineEdit();
     l->addWidget(exprEdit, 2, 1);
 
-    valueEdit = new QLineEdit();
+    QLineEdit *valueEdit = new QLineEdit();
     valueEdit->setReadOnly(true);
-    l->addWidget(valueEdit, 3, 1);
+    valueEdit->setFocusPolicy(Qt::NoFocus);
+
+    valueDisplay = valueEdit;
+    l->addWidget(valueDisplay, 3, 1);
 
     connect(nameEdit, &QLineEdit::editingFinished, this, &Value::invalidate);
     connect(typeEdit, &QLineEdit::editingFinished, this, &Value::invalidate);
     connect(exprEdit, &QLineEdit::editingFinished, this, &Value::invalidate);
-    connect(valueEdit, &QLineEdit::editingFinished, this, &Value::invalidate);
 
     connect(sheet, &HsSheet::reevaluated, this, &Value::requery);
 
@@ -47,6 +54,65 @@ void Value::invalidate()
 
 void Value::requery()
 {
-    if (auto value = sheet->queryCell(key))
-        valueEdit->setText(*value);
+    auto result = sheet->queryCell(key);
+
+    if (QString *msg = std::get_if<QString>(&result))
+    {
+        setValueText(*msg);
+    }
+    else if (HsValue *value = std::get_if<HsValue>(&result))
+    {
+        switch(value->getType())
+        {
+        case HsValue::ValueType::List:
+        {
+            QVector<HsValue> values = value->toList();
+            if (!values.empty()) {
+                QStringList valuesStr;
+                for (auto i = values.constBegin(); i != values.constEnd(); ++i)
+                    valuesStr.append(i->render());
+
+                QStringListModel *model = new QStringListModel(valuesStr);
+                auto valueEdit = getEditWidget<QListView>();
+                valueEdit->setModel(model);
+                valueEdit->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+                break;
+            }
+            // else fall through if list is null
+        }
+        default:
+            setValueText(value->render());
+            break;
+        }
+    }
+
+    return;
+}
+
+void Value::setValueText(QString valueText)
+{
+    auto valueEdit = getEditWidget<QLineEdit>();
+    valueEdit->setReadOnly(true);
+    valueEdit->setText(valueText);
+}
+
+template<class W>
+W* Value::getEditWidget()
+{
+    W *w;
+    if (auto e = dynamic_cast<W *>(valueDisplay))
+    {
+        w = e;
+    }
+    else
+    {
+        w = new W();
+        w->setFocusPolicy(Qt::NoFocus);
+        delete layout->replaceWidget(valueDisplay, w);
+        delete valueDisplay;
+        valueDisplay = w;
+    }
+
+    return w;
 }

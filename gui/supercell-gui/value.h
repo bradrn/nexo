@@ -20,10 +20,17 @@ private:
     int key;
     HsSheet *sheet;
 
+    QLayout *layout;
+
     QLineEdit *nameEdit;
     QLineEdit *typeEdit;
     QLineEdit *exprEdit;
-    QLineEdit *valueEdit;
+    QWidget *valueDisplay;
+
+    template<class W>
+    W* getEditWidget();
+
+    void setValueText(QString valueText);
 };
 
 #endif // VALUE_H
