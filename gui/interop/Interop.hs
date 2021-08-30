@@ -18,12 +18,16 @@ import Brassica.Interpret
 hsNewSheet :: IO (StablePtr (IORef Sheet))
 hsNewSheet = newStablePtr =<< newIORef (Sheet Map.empty)
 
-hsParseExpr :: CString -> Ptr Bool -> IO (StablePtr Expr)
+cFalse, cTrue :: CBool
+cFalse = 0
+cTrue = 1
+
+hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr Expr)
 hsParseExpr cinput successPtr = do
     input <- GHC.peekCString utf8 cinput
     case parseMaybe pExpr input of
-        Nothing -> poke successPtr False >> newStablePtr zeroExpr
-        Just xp -> poke successPtr True  >> newStablePtr xp
+        Nothing -> poke successPtr cFalse >> newStablePtr zeroExpr
+        Just xp -> poke successPtr cTrue  >> newStablePtr xp
 
 hsMaybeParseType :: CString -> IO (StablePtr (Maybe Type))
 hsMaybeParseType cinput = do
@@ -48,13 +52,13 @@ hsEvalSheet ptr = do
     ref <- deRefStablePtr ptr
     modifyIORef' ref evalSheet
 
-hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr Bool -> IO (StablePtr ValueState)
+hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState)
 hsQuery k ptr successPtr = do
     ref <- deRefStablePtr ptr
     Sheet s <- readIORef ref
     case Map.lookup (fromIntegral k) s of
-        Nothing -> poke successPtr False >> newStablePtr Invalidated
-        Just cl -> poke successPtr True  >> newStablePtr (cellValue cl)
+        Nothing -> poke successPtr cFalse >> newStablePtr Invalidated
+        Just cl -> poke successPtr cTrue  >> newStablePtr (cellValue cl)
 
 hsDisplayError :: StablePtr ValueState -> IO CString
 hsDisplayError ptr = deRefStablePtr ptr >>= \case
@@ -89,12 +93,12 @@ hsValueToList ptr lptr = deRefStablePtr ptr >>= \case
     _ -> error "hsValueToList: tried to convert non-list to list"
 
 foreign export ccall hsNewSheet :: IO (StablePtr (IORef Sheet))
-foreign export ccall hsParseExpr :: CString -> Ptr Bool -> IO (StablePtr Expr)
+foreign export ccall hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr Expr)
 foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe Type))
 foreign export ccall hsMkCell :: CString -> StablePtr (Maybe Type) -> StablePtr Expr -> IO (StablePtr Cell)
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()
 foreign export ccall hsEvalSheet :: StablePtr (IORef Sheet) -> IO () 
-foreign export ccall hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr Bool -> IO (StablePtr ValueState)
+foreign export ccall hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState)
 foreign export ccall hsDisplayError :: StablePtr ValueState -> IO CString
 foreign export ccall hsExtractTopLevelType :: StablePtr ValueState -> IO CInt
 foreign export ccall hsExtractValue :: StablePtr ValueState -> IO (StablePtr Value)
