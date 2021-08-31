@@ -66,11 +66,11 @@ void Value::requery()
         {
         case HsValue::ValueType::List:
         {
-            QVector<HsValue> values = value->toList();
+            QVector<HsValue *> values = value->toList();
             if (!values.empty()) {
                 QStringList valuesStr;
                 for (auto i = values.constBegin(); i != values.constEnd(); ++i)
-                    valuesStr.append(i->render());
+                    valuesStr.append((*i)->render());
 
                 QStringListModel *model = new QStringListModel(valuesStr);
                 auto valueEdit = getEditWidget<QListView>();

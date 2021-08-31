@@ -19,12 +19,17 @@ public:
     };
 
     HsValue(HsStablePtr value, ValueType type);
+    HsValue(HsValue&& hsValue);
+    ~HsValue();
+
+    HsValue(const HsValue&) = delete;
+    HsValue operator=(const HsValue&) = delete;
 
     ValueType getType();
     QString render() const;
 
     // warning: only use on list!
-    QVector<HsValue> toList() const;
+    QVector<HsValue *> toList() const;
 
 private:
     HsStablePtr value;

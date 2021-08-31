@@ -13,6 +13,10 @@ class HsSheet : public QWidget
     Q_OBJECT
 public:
     HsSheet();
+    ~HsSheet();
+
+    HsSheet(const HsSheet&) = delete;
+    HsSheet operator=(const HsSheet&) = delete;
 
     void insertCell(int key, QString name, QString type, QString expr);
     std::variant<std::monostate, QString, HsValue> queryCell(int key);

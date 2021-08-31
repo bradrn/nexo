@@ -92,6 +92,9 @@ hsValueToList ptr lptr = deRefStablePtr ptr >>= \case
         newArray vs'
     _ -> error "hsValueToList: tried to convert non-list to list"
 
+hsNullStablePtr :: IO (StablePtr ())
+hsNullStablePtr = newStablePtr ()
+
 foreign export ccall hsNewSheet :: IO (StablePtr (IORef Sheet))
 foreign export ccall hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr Expr)
 foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe Type))
@@ -104,3 +107,4 @@ foreign export ccall hsExtractTopLevelType :: StablePtr ValueState -> IO CInt
 foreign export ccall hsExtractValue :: StablePtr ValueState -> IO (StablePtr Value)
 foreign export ccall hsRenderValue :: StablePtr Value -> IO CString
 foreign export ccall hsValueToList :: StablePtr Value -> Ptr CInt -> IO (Ptr (StablePtr Value))
+foreign export ccall hsNullStablePtr :: IO (StablePtr ())
