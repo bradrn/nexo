@@ -19,7 +19,12 @@ void HsSheet::insertCell(int key, QString name, QString type, QString expr)
 {
     bool *parseSuccess = new bool();
     HsStablePtr pexpr = hsParseExpr(expr.toUtf8().data(), parseSuccess);
-    if (!*parseSuccess) return;
+    if (!*parseSuccess)
+    {
+        hs_free_stable_ptr(pexpr);
+        delete parseSuccess;
+        return;
+    }
 
     HsStablePtr ptype = hsMaybeParseType(type.toUtf8().data());
     HsStablePtr cell = hsMkCell(name.toUtf8().data(), ptype, pexpr);
@@ -47,7 +52,12 @@ void HsSheet::insertLiteralList(int key, QString name, QString type, QStringList
 
     bool *parseSuccess = new bool();
     HsStablePtr pexpr = hsParseLiteralList(length, clist, parseSuccess);
-    if (!*parseSuccess) return;
+    if (!*parseSuccess)
+    {
+        hs_free_stable_ptr(pexpr);
+        delete parseSuccess;
+        return;
+    }
 
     HsStablePtr ptype = hsMaybeParseType(const_cast<char *>(type.toUtf8().constData()));
     HsStablePtr cell = hsMkCell(name.toUtf8().data(), ptype, pexpr);
@@ -65,15 +75,19 @@ void HsSheet::insertLiteralList(int key, QString name, QString type, QStringList
 
 std::variant<std::monostate, QString, HsValue> HsSheet::queryCell(int key)
 {
+    std::variant<std::monostate, QString, HsValue> retval {};
+
     bool *qSuccess = new bool();
     HsStablePtr value = hsQuery(key, hsSheet, qSuccess);
-    if (!*qSuccess) return {};
+    if (!*qSuccess) goto cleanup;
 
     if (auto error = (char *) hsDisplayError(value); *error)
-        return QString::fromUtf8(error);
+        retval.emplace<1>(QString::fromUtf8(error));
     else
-        return HsValue(hsExtractValue(value), static_cast<HsValue::ValueType>(hsExtractTopLevelType(value)));
+        retval.emplace<2>(HsValue(hsExtractValue(value), static_cast<HsValue::ValueType>(hsExtractTopLevelType(value))));
 
+cleanup:
     hs_free_stable_ptr(value);
     delete qSuccess;
+    return retval;
 }
