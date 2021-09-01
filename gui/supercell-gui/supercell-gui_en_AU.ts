@@ -7,5 +7,9 @@
         <source>&amp;Value</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>&amp;Input List</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

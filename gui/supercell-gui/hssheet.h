@@ -19,6 +19,7 @@ public:
     HsSheet operator=(const HsSheet&) = delete;
 
     void insertCell(int key, QString name, QString type, QString expr);
+    void insertLiteralList(int key, QString name, QString type, QStringList lits);
     std::variant<std::monostate, QString, HsValue> queryCell(int key);
 
 signals:

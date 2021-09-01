@@ -32,6 +32,8 @@ add_executable(supercell-gui
   value.h
   hsvalue.cpp
   hsvalue.h
+  inputlist.cpp
+  inputlist.h
   ${TS_FILES}
 )
 

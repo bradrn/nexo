@@ -29,6 +29,16 @@ hsParseExpr cinput successPtr = do
         Nothing -> poke successPtr cFalse >> newStablePtr zeroExpr
         Just xp -> poke successPtr cTrue  >> newStablePtr xp
 
+hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr Expr)
+hsParseLiteralList clen cinput successPtr = do
+    cinputs <- peekArray (fromIntegral clen) cinput
+    inputs <- traverse (GHC.peekCString utf8) cinputs
+    case traverse (parseMaybe pValue) inputs of
+        Nothing -> poke successPtr cFalse >> newStablePtr zeroExpr
+        Just values ->
+            let xp = Fix . XList $ Fix . XLit <$> values
+            in poke successPtr cTrue >> newStablePtr xp
+
 hsMaybeParseType :: CString -> IO (StablePtr (Maybe Type))
 hsMaybeParseType cinput = do
     input <- GHC.peekCString utf8 cinput
@@ -97,6 +107,7 @@ hsNullStablePtr = newStablePtr ()
 
 foreign export ccall hsNewSheet :: IO (StablePtr (IORef Sheet))
 foreign export ccall hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr Expr)
+foreign export ccall hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr Expr)
 foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe Type))
 foreign export ccall hsMkCell :: CString -> StablePtr (Maybe Type) -> StablePtr Expr -> IO (StablePtr Cell)
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()

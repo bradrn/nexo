@@ -21,14 +21,15 @@ protected:
 
 private slots:
     void newValue();
+    void newInputList();
 
 private:
     QMdiArea *mdiArea;
 
-    QVector<Value *> values;
     int latestKey;
 
     QAction *newValueAct;
+    QAction *newInputListAct;
 
     HsSheet *sheet;
 };

@@ -1,4 +1,5 @@
 #include "hssheet.h"
+#include "inputlist.h"
 #include "mainwindow.h"
 #include "value.h"
 
@@ -10,7 +11,6 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , mdiArea(new QMdiArea)
-    , values()
     , latestKey(0)
     , sheet(new HsSheet)
 {
@@ -19,7 +19,10 @@ MainWindow::MainWindow(QWidget *parent)
     setCentralWidget(mdiArea);
 
     newValueAct = new QAction(tr("&Value"));
+    newInputListAct = new QAction(tr("&Input List"));
+
     connect(newValueAct, &QAction::triggered, this, &MainWindow::newValue);
+    connect(newInputListAct, &QAction::triggered, this, &MainWindow::newInputList);
 }
 
 MainWindow::~MainWindow()
@@ -32,6 +35,7 @@ void MainWindow::contextMenuEvent(QContextMenuEvent *event)
 
     QMenu *newMenu = menu.addMenu("New");
     newMenu->addAction(newValueAct);
+    newMenu->addAction(newInputListAct);
 
     menu.exec(event->globalPos());
 }
@@ -40,7 +44,13 @@ void MainWindow::newValue()
 {
     Value *v = new Value(latestKey++, sheet);
     mdiArea->addSubWindow(v);
-    values.append(v);
     v->show();
+}
+
+void MainWindow::newInputList()
+{
+    InputList *il = new InputList(latestKey++, sheet);
+    mdiArea->addSubWindow(il);
+    il->show();
 }
 

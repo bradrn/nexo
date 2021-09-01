@@ -9,6 +9,8 @@
 module Brassica.Interpret
        ( Type(..)
        , Expr
+       , ExprF(..)
+       , Fix(..)
        , Value(..)
        , zeroExpr
        , Sheet(..)
@@ -21,6 +23,7 @@ module Brassica.Interpret
        , parseMaybe
        , pType
        , pExpr
+       , pValue
        ) where
 
 import Control.Monad.Combinators.Expr
