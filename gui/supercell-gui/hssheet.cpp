@@ -41,7 +41,8 @@ void HsSheet::insertLiteralList(int key, QString name, QString type, QStringList
     for (int i=0; i<length; i++)
     {
         QString lit = lits[i];
-        clist[i] = lit.toUtf8().data();
+        clist[i] = new char[lit.length()+1];
+        strcpy(clist[i], lit.toUtf8().data());
     }
 
     bool *parseSuccess = new bool();
