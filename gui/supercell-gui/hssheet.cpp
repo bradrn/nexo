@@ -56,6 +56,9 @@ void HsSheet::insertLiteralList(int key, QString name, QString type, QStringList
     {
         hs_free_stable_ptr(pexpr);
         delete parseSuccess;
+        for (int i=0; i<length; i++)
+            delete clist[i];
+        delete[] clist;
         return;
     }
 
@@ -67,6 +70,8 @@ void HsSheet::insertLiteralList(int key, QString name, QString type, QStringList
     hs_free_stable_ptr(ptype);
     hs_free_stable_ptr(pexpr);
     delete parseSuccess;
+    for (int i=0; i<length; i++)
+        delete clist[i];
     delete[] clist;
 
     hsEvalSheet(hsSheet);
