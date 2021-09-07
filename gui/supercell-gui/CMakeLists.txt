@@ -41,4 +41,4 @@ target_link_libraries(supercell-gui
   PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
   ${SUPERCELL_INTEROP_DIR}/supercell-interop.a ws2_32 psapi dbghelp winmm)
 
-qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
+qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
