@@ -447,12 +447,12 @@ evalApp (Left OAnd  ) [VBool p, VBool q] = VBool $ p && q
 evalApp (Left OOr   ) [VBool p, VBool q] = VBool $ p || q
 evalApp _ _ = error "evalApp: bug in typechecker"
 
-broadcast :: ([Value] -> Value) -> [(Int, Value)] -> Value
+broadcast :: MonadFail f => ([Value] -> Value) -> [(Int, Value)] -> f Value
 broadcast fn args
-    | all ((0==) . fst) args = fn $ snd <$> args
-    | otherwise = VList $ broadcast fn <$> unliftSplit args
+    | all ((0==) . fst) args = pure $ fn $ snd <$> args
+    | otherwise = fmap VList $ traverse (broadcast fn) =<< unliftSplit args
   where
-    unliftSplit :: [(Int, Value)] -> [[(Int, Value)]]
+    unliftSplit :: MonadFail f => [(Int, Value)] -> f [[(Int, Value)]]
     unliftSplit args' =
         let levels = fst <$> args'
             maxlevel = if null levels then 0 else maximum levels
@@ -462,13 +462,20 @@ broadcast fn args
             placeholders = zipWith
                 (\level x -> if level == maxlevel then Nothing else Just x)
                 levels args'
-        in replaceIn placeholders <$> transposeVLists fills
+        in fmap (replaceIn placeholders) <$> transposeVLists fills
 
-    transposeVLists :: [(Int, Value)] -> [[(Int, Value)]]
-    transposeVLists = transpose . fmap extractVList
+    transposeVLists :: MonadFail f => [(Int, Value)] -> f [[(Int, Value)]]
+    transposeVLists = transpose' . fmap extractVList
       where
         extractVList (i, VList l) = (i-1,) <$> l
         extractVList _ = error "broadcast: bug in typechecker"
+
+        transpose' [] = pure []
+        transpose' ls =
+            let lens = length <$> ls in
+                if all (==head lens) lens
+                then pure $ transpose ls
+                else fail "#LENGTH"
 
     replaceIn :: [Maybe a] -> [a] -> [a]
     replaceIn [] _ = []
@@ -481,7 +488,7 @@ evalExpr lookupName = cata \case
     CLitF v -> pure v
     CVarF name -> lookupName name
     CRecF xs -> VRecord <$> sequenceA xs
-    CAppF fn es -> broadcast (evalApp fn) <$> traverse liftTuple es
+    CAppF fn es -> broadcast (evalApp fn) =<< traverse liftTuple es
   where
     liftTuple :: Functor f => (a, f b) -> f (a, b)
     liftTuple (a, b) = (a,) <$> b
