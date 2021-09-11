@@ -26,9 +26,11 @@ module Brassica.Interpret
        , pValue
        ) where
 
+import Control.Applicative (liftA2)
 import Control.Monad.Combinators.Expr
 import Control.Monad.State.Strict
     ( execState, gets, modify', put, state, runState, State, StateT (..), MonadState )
+import Data.Bifunctor (first, second)
 import Data.Containers.ListUtils (nubOrd)
 import Data.Fix (Fix(..))
 import Data.Functor.Foldable (cata)
@@ -45,11 +47,13 @@ import Data.Maybe (listToMaybe, catMaybes)
 import Control.Monad (zipWithM)
 import Data.List (transpose, sort, intercalate)
 
+import Brassica.Unit
+
 ----------------------- TYPES ----------------------- 
 
 -- | Data type listing all the types in Supercell
 data Type
-    = TNum
+    = TNum UnitDef
     | TBool
     | TText
     | TVar TVar
@@ -101,6 +105,7 @@ data ExprF r
     | XField r String
     | XFun String [r]
     | XOp Op r r
+    | XUnit r UnitDef
     deriving (Show, Functor)
 deriveShow1 ''ExprF
 
@@ -193,8 +198,33 @@ pIdentifier = lexeme $ (:) <$> letterChar <*> many (alphaNumChar <|> oneOf "_")
 pRecordSpec :: Parser a -> Parser (Map.Map String a)
 pRecordSpec p = fmap Map.fromList $ ((,) <$> pIdentifier <* symbol ":" <*> p) `sepBy` symbol ","
 
+pUnit :: Parser UnitDef
+pUnit = do
+    f <- factored
+    UDiv f <$> (symbol "/" *> pUnit)
+        <|> UExp f <$> (symbol "^" *> L.decimal)
+        <|> UMul f <$> pUnit
+        <|> pure f
+  where
+    factored =
+        try (mkPrefix <$> pPrefix <*> pIdentifier)
+        <|> UName <$> pIdentifier
+        <|> UFactor <$> L.decimal
+        <|> paren pUnit
+
+    mkPrefix p u = UMul (UPrefix p) (UName u)
+
+    pPrefix :: Parser String
+    pPrefix = choice $ symbol <$>
+        ["Y","Z","E","P","T","G","M","k","h","da","d"
+        ,"c","m","μ","u","n","p","f","a","z","y"   
+        ]
+
+pUnitType :: Parser UnitDef
+pUnitType = between (symbol "<") (symbol ">") pUnit <|> pure Uno
+
 pType :: Parser Type
-pType = TNum <$ symbol "Num"
+pType = TNum <$> (symbol "Num" *> pUnitType)
     <|> TBool <$ symbol "Bool"
     <|> TText <$ symbol "Text"
     <|> TRecord <$> paren (pRecordSpec pType)
@@ -234,7 +264,7 @@ operatorTable =
     wrap e x y = Fix $ e x y
 
 pTerm :: Parser Expr
-pTerm = wrapDot $ choice
+pTerm = wrap $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
     , paren pExpr
@@ -243,10 +273,12 @@ pTerm = wrapDot $ choice
     , Fix . XLit <$> pValue
     ]
   where
-    wrapDot :: Parser Expr -> Parser Expr
-    wrapDot p = do
+    wrap :: Parser Expr -> Parser Expr
+    wrap p = do
         r <- p
-        (Fix . XField r <$> (symbol "." *> pIdentifier)) <|> pure r
+        (Fix . XField r <$> (symbol "." *> pIdentifier))
+            <|> (Fix . XUnit r <$> pUnit)
+            <|> pure r
 
 pExpr :: Parser Expr
 pExpr = makeExprParser pTerm operatorTable
@@ -257,7 +289,7 @@ data CoreExpr
     = CLit Value
     | CVar String
     | CRec (Map.Map String CoreExpr)
-    | CApp (Either Op String) [(Int, CoreExpr)]
+    | CApp (Either Op String) [((Int, Maybe Double), CoreExpr)]
     deriving (Show)
 
 makeBaseFunctor ''CoreExpr
@@ -266,7 +298,7 @@ typecheck :: MonadFail f => (String -> f Type) -> Expr -> f (CoreExpr, Type)
 typecheck lookupName = cata \case
     XLit v -> pure $ (CLit v,) $
         case v of
-            VNum _ -> TNum
+            VNum _ -> TNum Uno
             VBool _ -> TBool
             VText _ -> TText
             VRecord _ -> error "typecheck: bug in parser"
@@ -276,7 +308,7 @@ typecheck lookupName = cata \case
         let xs = fst <$> vs'
             ts = snd <$> vs'
         case nubOrd ts of
-            [t] -> pure (CApp (Right "List") $ (0,) <$> xs, TList t)
+            [t] -> pure (CApp (Right "List") $ ((0,Nothing),) <$> xs, TList t)
             _ -> fail "#TYPE"
     XRecord kvs -> do
         kvs' <- sequenceA kvs
@@ -289,8 +321,8 @@ typecheck lookupName = cata \case
             TRecord fs | Just tf <- Map.lookup f fs
               -> pure
                  ( CApp (Right "GetField")
-                        [ (0,r)
-                        , (0,CLit (VText f))
+                        [ ((0,Nothing),r)
+                        , ((0,Nothing),CLit (VText f))
                         ]
                  , tf)
             _ -> fail "#TYPE"
@@ -306,44 +338,48 @@ typecheck lookupName = cata \case
         (xy, ty) <- y
         ([px, py], t) <- unify [tx, ty] =<< optype o
         pure (CApp (Left o) [(px, xx), (py, xy)], t)
+    XUnit r' u -> do
+        (r, tr) <- r'
+        (_, t) <- unify [tr] (FunType [TNum Uno] (TNum u))
+        pure (r, t)
   where
     fntype "If" = pure $ FunType [TBool, TVar "a", TVar "a"] (TVar "a")
-    fntype "Mean" = pure $ FunType [TList TNum] TNum
-    fntype "Avg"  = pure $ FunType [TList TNum] TNum
-    fntype "PopStdDev" = pure $ FunType [TList TNum] TNum
-    fntype "Median" = pure $ FunType [TList TNum] TNum
-    fntype "Mode" = pure $ FunType [TList TNum] TNum
-    fntype "Sin" = pure $ FunType [TNum] TNum
-    fntype "Cos" = pure $ FunType [TNum] TNum
-    fntype "Tan" = pure $ FunType [TNum] TNum
-    fntype "InvSin" = pure $ FunType [TNum] TNum
-    fntype "InvCos" = pure $ FunType [TNum] TNum
-    fntype "InvTan" = pure $ FunType [TNum] TNum
-    fntype "Root" = pure $ FunType [TNum, TNum] TNum
-    fntype "Power" = pure $ FunType [TNum, TNum] TNum
+    fntype "Mean" = pure $ FunType [TList (TNum $ UVar "u")] (TNum $ UVar "u")
+    fntype "Avg"  = pure $ FunType [TList (TNum $ UVar "u")] (TNum $ UVar "u")
+    fntype "PopStdDev" = pure $ FunType [TList (TNum $ UVar "u")] (TNum $ UVar "u")
+    fntype "Median" = pure $ FunType [TList (TNum $ UVar "u")] (TNum $ UVar "u")
+    fntype "Mode" = pure $ FunType [TList (TNum $ UVar "u")] (TNum $ UVar "u")
+    fntype "Sin" = pure $ FunType [TNum (UName "rad")] (TNum Uno)
+    fntype "Cos" = pure $ FunType [TNum (UName "rad")] (TNum Uno)
+    fntype "Tan" = pure $ FunType [TNum (UName "rad")] (TNum Uno)
+    fntype "InvSin" = pure $ FunType [TNum Uno] (TNum (UName "rad"))
+    fntype "InvCos" = pure $ FunType [TNum Uno] (TNum (UName "rad"))
+    fntype "InvTan" = pure $ FunType [TNum Uno] (TNum (UName "rad"))
+    fntype "Root" = pure $ FunType [TNum Uno, TNum Uno] (TNum Uno)
+    fntype "Power" = pure $ FunType [TNum Uno, TNum Uno] (TNum Uno)
     fntype _ = fail "#NAME"
 
     optype OEq    = pure $ FunType [TVar "a", TVar "a"] (TVar "a")
     optype ONeq   = pure $ FunType [TVar "a", TVar "a"] (TVar "a")
-    optype OPlus  = pure $ FunType [TNum, TNum] TNum
-    optype OMinus = pure $ FunType [TNum, TNum] TNum
-    optype OTimes = pure $ FunType [TNum, TNum] TNum
-    optype ODiv   = pure $ FunType [TNum, TNum] TNum
-    optype OGt    = pure $ FunType [TNum, TNum] TBool
-    optype OLt    = pure $ FunType [TNum, TNum] TBool
+    optype OPlus  = pure $ FunType [TNum $ UVar "u", TNum $ UVar "u"] (TNum $ UVar "u")
+    optype OMinus = pure $ FunType [TNum $ UVar "u", TNum $ UVar "u"] (TNum $ UVar "u")
+    optype OTimes = pure $ FunType [TNum $ UVar "u", TNum $ UVar "v"] (TNum $ UMul (UVar "u") (UVar "v"))
+    optype ODiv   = pure $ FunType [TNum $ UVar "u", TNum $ UVar "v"] (TNum $ UMul (UVar "u") (UVar "v"))
+    optype OGt    = pure $ FunType [TNum $ UVar "u", TNum $ UVar "u"] TBool
+    optype OLt    = pure $ FunType [TNum $ UVar "u", TNum $ UVar "u"] TBool
     optype OAnd   = pure $ FunType [TBool, TBool] TBool
     optype OOr    = pure $ FunType [TBool, TBool] TBool
 
-    unify :: MonadFail f => [Type] -> FunType -> f ([Int], Type)
+    unify :: MonadFail f => [Type] -> FunType -> f ([(Int, Maybe Double)], Type)
     unify ts (FunType args out) = do
         targs <- zip' ts args
-        let substs = getSubsts targs
-        case traverse meets substs of
+        let (tsubsts, usubsts) = getSubsts targs
+        case liftA2 (,) (traverse meets tsubsts) (traverse concords usubsts) of
             Nothing -> fail "#TYPE"
-            Just substs' -> do
-                let args' = subst substs' args
+            Just (tsubsts', usubsts') -> do
+                let args' = usubst usubsts' $ subst tsubsts' args
                 levels <- zipWithM match ts args'
-                let maxlevel = if null levels then 0 else maximum levels
+                let maxlevel = if null levels then 0 else maximum (fst <$> levels)
                 pure (levels, liftBy maxlevel out)
 
     zip' :: MonadFail f => [a] -> [b] -> f [(a, b)]
@@ -351,13 +387,15 @@ typecheck lookupName = cata \case
     zip' [] [] = pure []
     zip' _ _ = fail "#TYPE"
 
-    getSubsts :: [(Type, Type)] -> Map.Map String [Type]
-    getSubsts = flip execState Map.empty . go
+    getSubsts :: [(Type, Type)] -> (Map.Map String [Type], Map.Map String [UnitDef])
+    getSubsts = second (fmap reverse) . flip execState (Map.empty, Map.empty) . go
       where
-        go :: [(Type, Type)] -> State (Map.Map String [Type]) ()
+        go :: [(Type, Type)] -> State (Map.Map String [Type], Map.Map String [UnitDef]) ()
         go [] = pure ()
         go ((t,TVar v) : ts) =
-            modify' (Map.insertWith (++) v [t]) >> go ts
+            modify' (first $ Map.insertWith (++) v [t]) >> go ts
+        go ((TNum u, TNum (UVar v)) : ts) =
+            modify' (second $ Map.insertWith (++) v [u]) >> go ts
         go ((TList t1, TList t2) : ts) = go ((t1,t2) : ts)
         go (_ : ts) = go ts
 
@@ -368,9 +406,17 @@ typecheck lookupName = cata \case
         Just t -> subst ss $ t : ts
     subst ss (t : ts) = t : subst ss ts
 
-    match :: MonadFail f => Type -> Type -> f Int
-    match t t' | t == t' = pure 0
-    match (TList t) t' = (1+) <$> match t t'
+    usubst :: Map.Map String UnitDef -> [Type] -> [Type]
+    usubst _ [] = []
+    usubst ss (TNum (UVar v) : ts) = case Map.lookup v ss of
+        Nothing -> TNum (UVar v) : usubst ss ts
+        Just u -> usubst ss $ TNum u : ts
+    usubst ss (t : ts) = t : usubst ss ts
+
+    match :: MonadFail f => Type -> Type -> f (Int, Maybe Double)
+    match t t' | t == t' = pure (0, Nothing)
+    match (TList t) t' = first (1+) <$> match t t'
+    match (TNum u) (TNum v) | Just f <- concord u v = pure (0, Just f)
     match _ _ = fail "#TYPE"
 
     liftBy :: Int -> Type -> Type
@@ -447,14 +493,19 @@ evalApp (Left OAnd  ) [VBool p, VBool q] = VBool $ p && q
 evalApp (Left OOr   ) [VBool p, VBool q] = VBool $ p || q
 evalApp _ _ = error "evalApp: bug in typechecker"
 
-broadcast :: MonadFail f => ([Value] -> Value) -> [(Int, Value)] -> f Value
+broadcast :: MonadFail f => ([Value] -> Value) -> [((Int, Maybe Double), Value)] -> f Value
 broadcast fn args
-    | all ((0==) . fst) args = pure $ fn $ snd <$> args
+    | all ((0==) . fst . fst) args = pure $ fn $ applyFactor <$> args
     | otherwise = fmap VList $ traverse (broadcast fn) =<< unliftSplit args
   where
-    unliftSplit :: MonadFail f => [(Int, Value)] -> f [[(Int, Value)]]
+    applyFactor :: ((Int, Maybe Double), Value) -> Value
+    applyFactor ((_, Nothing), v) = v
+    applyFactor ((_, Just f), VNum n) = VNum (f*n)
+    applyFactor _ = error "broadcast: bug in typechecker"
+
+    unliftSplit :: MonadFail f => [((Int, Maybe Double), Value)] -> f [[((Int, Maybe Double), Value)]]
     unliftSplit args' =
-        let levels = fst <$> args'
+        let levels = fst . fst <$> args'
             maxlevel = if null levels then 0 else maximum levels
             fills = catMaybes $ zipWith
                 (\level x -> if level == maxlevel then Just x else Nothing)
@@ -464,10 +515,10 @@ broadcast fn args
                 levels args'
         in fmap (replaceIn placeholders) <$> transposeVLists fills
 
-    transposeVLists :: MonadFail f => [(Int, Value)] -> f [[(Int, Value)]]
+    transposeVLists :: MonadFail f => [((Int, Maybe Double), Value)] -> f [[((Int, Maybe Double), Value)]]
     transposeVLists = transpose' . fmap extractVList
       where
-        extractVList (i, VList l) = (i-1,) <$> l
+        extractVList ((i,f), VList l) = ((i-1,f),) <$> l
         extractVList _ = error "broadcast: bug in typechecker"
 
         transpose' [] = pure []

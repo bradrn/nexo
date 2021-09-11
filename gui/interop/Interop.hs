@@ -78,7 +78,7 @@ hsDisplayError ptr = deRefStablePtr ptr >>= \case
 hsExtractTopLevelType :: StablePtr ValueState -> IO CInt
 hsExtractTopLevelType ptr = deRefStablePtr ptr >>= \case
     ValuePresent t _ -> return $ case t of
-        TNum -> 1
+        TNum _ -> 1
         TBool -> 2
         TText -> 3
         TVar _ -> 4
