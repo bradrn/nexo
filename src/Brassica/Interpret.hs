@@ -377,10 +377,11 @@ typecheck lookupName = cata \case
         case liftA2 (,) (traverse meets tsubsts) (traverse concords usubsts) of
             Nothing -> fail "#TYPE"
             Just (tsubsts', usubsts') -> do
-                let args' = usubst usubsts' $ subst tsubsts' args
+                let args' = usubst usubsts' . subst tsubsts' <$> args
+                    out'  = usubst usubsts' . subst tsubsts'  $  out
                 levels <- zipWithM match ts args'
                 let maxlevel = if null levels then 0 else maximum (fst <$> levels)
-                pure (levels, liftBy maxlevel out)
+                pure (levels, liftBy maxlevel out')
 
     zip' :: MonadFail f => [a] -> [b] -> f [(a, b)]
     zip' (a:as) (b:bs) = ((a,b) :) <$> zip' as bs
@@ -399,19 +400,17 @@ typecheck lookupName = cata \case
         go ((TList t1, TList t2) : ts) = go ((t1,t2) : ts)
         go (_ : ts) = go ts
 
-    subst :: Map.Map String Type -> [Type] -> [Type]
-    subst _ [] = []
-    subst ss (TVar v : ts) = case Map.lookup v ss of
-        Nothing -> TVar v : subst ss ts
-        Just t -> subst ss $ t : ts
-    subst ss (t : ts) = t : subst ss ts
+    subst :: Map.Map String Type -> Type -> Type
+    subst ss (TVar v) = case Map.lookup v ss of
+        Nothing -> TVar v
+        Just t -> subst ss t
+    subst _ t = t
 
-    usubst :: Map.Map String UnitDef -> [Type] -> [Type]
-    usubst _ [] = []
-    usubst ss (TNum (UVar v) : ts) = case Map.lookup v ss of
-        Nothing -> TNum (UVar v) : usubst ss ts
-        Just u -> usubst ss $ TNum u : ts
-    usubst ss (t : ts) = t : usubst ss ts
+    usubst :: Map.Map String UnitDef -> Type -> Type
+    usubst ss (TNum (UVar v)) = case Map.lookup v ss of
+        Nothing -> TNum (UVar v)
+        Just u -> usubst ss $ TNum u
+    usubst _ t = t
 
     match :: MonadFail f => Type -> Type -> f (Int, Maybe Double)
     match t t' | t == t' = pure (0, Nothing)
