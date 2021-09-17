@@ -1,8 +1,8 @@
-name:                supercell
+name:                nexo
 version:             0.1.0.0
 -- synopsis:
 -- description:
-homepage:            https://github.com/githubuser/supercell#readme
+homepage:            https://github.com/bradrn/supercell#readme
 -- license:             BSD3
 -- license-file:        LICENSE
 author:              Author name here
@@ -15,8 +15,8 @@ extra-source-files:  README.md
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Brassica.Interpret
-                     , Brassica.Unit
+  exposed-modules:     Nexo.Interpret
+                     , Nexo.Unit
   default-language:    Haskell2010
   ghc-options:         -Wall
   build-depends:       base >= 4.7 && < 5

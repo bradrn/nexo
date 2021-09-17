@@ -1,15 +1,15 @@
-# supercell
+# Nexo
 
 ## Tips and Tricks and how to compile our code
 
 To compile the Haskell code, just run `stack build`.
-Then open `./gui/supercell-gui/CMakeLists.txt` in Qt Creator.
+Then open `./gui/nexo-gui/CMakeLists.txt` in Qt Creator.
 You should then be able to build and run the GUI like any other Qt program.
-You can also run the interactive interpreter on the Haskell code alone by running `stack ghci supercell:lib`.
+You can also run the interactive interpreter on the Haskell code alone by running `stack ghci nexo:lib`.
 
 ### Troubleshooting compiler errors
 
-When building Supercell for the first time you might see the following error:
+When building Nexo for the first time you might see the following error:
 
 ```
 --  While building package regex-posix-0.96.0.0 (scroll up to its section to see the error) using:

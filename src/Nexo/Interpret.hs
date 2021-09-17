@@ -6,7 +6,7 @@
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 
-module Brassica.Interpret
+module Nexo.Interpret
        ( Type(..)
        , Expr
        , ExprF(..)
@@ -47,11 +47,11 @@ import Data.Maybe (listToMaybe, catMaybes)
 import Control.Monad (zipWithM)
 import Data.List (transpose, sort, intercalate)
 
-import Brassica.Unit
+import Nexo.Unit
 
 ----------------------- TYPES ----------------------- 
 
--- | Data type listing all the types in Supercell
+-- | Data type listing all the types in Nexo
 data Type
     = TNum UnitDef
     | TBool

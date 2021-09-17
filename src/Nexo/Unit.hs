@@ -7,7 +7,7 @@
 {-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Brassica.Unit where
+module Nexo.Unit where
 
 import Control.Applicative (liftA2)
 import Data.Bifunctor (second)

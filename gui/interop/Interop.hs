@@ -13,7 +13,7 @@ import GHC.IO.Encoding (utf8)
 
 import qualified Data.Map.Strict as Map
 
-import Brassica.Interpret
+import Nexo.Interpret
 
 hsNewSheet :: IO (StablePtr (IORef Sheet))
 hsNewSheet = newStablePtr =<< newIORef (Sheet Map.empty)
