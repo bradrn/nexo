@@ -27,14 +27,3 @@ library
                      , mtl >= 2.2 && < 2.3
                      , parser-combinators >= 1.2 && < 1.3
                      , recursion-schemes >= 5.2 && < 5.3
-
-executable supercell
-  hs-source-dirs:      app
-  main-is:             Main.hs
-  default-language:    Haskell2010
-  ghc-options:         -O2 -Wall
-  build-depends:       base >= 4.7 && < 5
-                     , supercell
-                     , containers >= 0.6 && < 0.7
-                     , mtl >= 2.2 && < 2.3
-                     , threepenny-gui >= 0.9 && < 0.10

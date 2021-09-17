@@ -2,7 +2,5 @@ cradle:
   stack:
     - path: "./src/"
       component: "supercell:lib"
-    - path: "./app/"
-      component: "supercell:exe:supercell"
     - path: "./gui/interop/"
       component: "supercell-interop:lib"
