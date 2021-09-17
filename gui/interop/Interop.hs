@@ -4,6 +4,7 @@
 module Interop where
 
 import Control.Monad ((<=<))
+import Data.Fix (Fix(Fix))
 import Data.IORef
 import Data.List (genericLength)
 import Foreign
@@ -13,7 +14,9 @@ import GHC.IO.Encoding (utf8)
 
 import qualified Data.Map.Strict as Map
 
-import Nexo.Interpret
+import Nexo.Expr.Parse
+import Nexo.Expr.Type
+import Nexo.Sheet
 
 hsNewSheet :: IO (StablePtr (IORef Sheet))
 hsNewSheet = newStablePtr =<< newIORef (Sheet Map.empty)

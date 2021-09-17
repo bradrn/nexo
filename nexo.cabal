@@ -16,7 +16,12 @@ extra-source-files:  README.md
 library
   hs-source-dirs:      src
   exposed-modules:     Nexo.Interpret
-                     , Nexo.Unit
+                     , Nexo.Core.Type
+                     , Nexo.Core.Typecheck
+                     , Nexo.Expr.Parse
+                     , Nexo.Expr.Type
+                     , Nexo.Expr.Unit
+                     , Nexo.Sheet
   default-language:    Haskell2010
   ghc-options:         -Wall
   build-depends:       base >= 4.7 && < 5

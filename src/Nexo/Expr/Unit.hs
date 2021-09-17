@@ -7,7 +7,7 @@
 {-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Nexo.Unit where
+module Nexo.Expr.Unit where
 
 import Control.Applicative (liftA2)
 import Data.Bifunctor (second)
