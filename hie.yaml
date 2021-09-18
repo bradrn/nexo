@@ -2,5 +2,7 @@ cradle:
   stack:
     - path: "./src/"
       component: "nexo:lib"
+    - path: "./test/"
+      component: "nexo:test:nexo-test"
     - path: "./gui/interop/"
       component: "nexo-interop:lib"
