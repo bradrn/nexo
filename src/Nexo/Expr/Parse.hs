@@ -108,9 +108,9 @@ pTerm = wrap $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
     , paren pExpr
+    , Fix . XLit <$> pValue
     , Fix . XVar <$> pIdentifier
     , Fix . XList <$> sqparen (pExpr `sepBy` symbol ",")
-    , Fix . XLit <$> pValue
     ]
   where
     wrap :: Parser Expr -> Parser Expr
