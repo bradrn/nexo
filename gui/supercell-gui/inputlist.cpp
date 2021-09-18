@@ -1,4 +1,4 @@
-#include "hssheet.h"
+ #include "hssheet.h"
 #include "inputlist.h"
 
 #include <QGridLayout>
