@@ -42,7 +42,7 @@ pUnit :: Parser UnitDef
 pUnit = do
     f <- factored
     UDiv f <$> (symbol "/" *> pUnit)
-        <|> UExp f <$> (symbol "^" *> L.decimal)
+        <|> UExp f <$> (symbol "^" *> L.signed sc L.decimal)
         <|> UMul f <$> pUnit
         <|> pure f
   where
@@ -71,7 +71,7 @@ pType = TNum <$> (symbol "Num" *> pUnitType)
     <|> TList <$> (symbol "List" *> pType)
 
 pValue :: Parser Value
-pValue = VNum <$> lexeme (try L.float <|> L.decimal)
+pValue = VNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
     <|> VBool <$> pBool
     <|> VText <$> lexeme pString
   where
