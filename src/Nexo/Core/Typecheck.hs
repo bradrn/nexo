@@ -18,7 +18,7 @@ import Nexo.Expr.Type
 import Nexo.Expr.Unit
 
 data Conversion
-    = MultiplyBy Double UnitDef Conversion
+    = MultiplyBy Double Conversion
     | UnliftBy Int Conversion
     | IdConversion
   deriving (Show)
@@ -48,7 +48,7 @@ getConversion supplied@(TList _) declared =
 getConversion (TNum uSupplied) (TNum uDeclared) =
     case concord uSupplied uDeclared of
         Just 1 -> IdConversion
-        Just f -> MultiplyBy f uDeclared IdConversion
+        Just f -> MultiplyBy f IdConversion
         Nothing -> error "getConversion: bug in unifier"
 getConversion t1 t2
     | t1 == t2 = IdConversion
@@ -58,18 +58,24 @@ applyConversion
     :: ( MonadFail m
        , MonadFresh m
        )
-    => Conversion -> CoreExpr -> m (Int, CoreExpr)
-applyConversion (UnliftBy 0 c) x = applyConversion c x
-applyConversion (UnliftBy n c) x = do
-    (n', x') <- applyConversion c x
+    => Conversion -> (CoreExpr, Type) -> m (Int, CoreExpr)
+applyConversion (UnliftBy 0 c) (x, t) = applyConversion c (x, t)
+applyConversion (UnliftBy n c) (x, t) = do
+    (n', x') <- applyConversion c (x, t)
     pure (n+n', x')
-applyConversion (MultiplyBy f u c) x = do
+applyConversion (MultiplyBy f c) (x, t) = do
     -- need to re-run typechecker to make sure we insert unlifts correctly
     -- note that we avoid infinite recursion by doing all calculations with concordant units
-    (x', _) <- inferStep (error "applyConversion: bug in inferStep") $
-        XOp OTimes (pure (CLit (VNum f), TNum u)) (pure (x, TNum u))
+
+    let removeUnits (TList a) = TList $ removeUnits a
+        removeUnits (TNum _) = TNum Uno
+        removeUnits _ = error "applyConversion: bug in inferStep"
+        t' = removeUnits t
+
+    x' <- inferStep (error "applyConversion: bug in inferStep") $
+        XOp OTimes (pure (CLit (VNum f), TNum Uno)) (pure (x, t'))
     applyConversion c x'
-applyConversion IdConversion x = pure (0, x)
+applyConversion IdConversion (x, _) = pure (0, x)
 
 -- This uses a variant of Hindley-Milner. Rather than composing all
 -- the substitutions then applying at the end, instead it applies each
@@ -120,7 +126,8 @@ inferStep lookupName = \case
         argtsDeclared <- whenJustElse "#TYPE" $ getTFunArgs <$> apply s tfun
 
         let convs = zipWith getConversion argtsSupplied argtsDeclared :: [Conversion]
-        argsConverted <- traverse2 "#TYPE" applyConversion convs args
+            argsWithTs = zip args argtsSupplied :: [(CoreExpr, Type)]
+        argsConverted <- traverse2 "#TYPE" applyConversion convs argsWithTs
         
         ret <- whenJustElse "#TYPE" $ apply s (TVar tv)
         let ret' = liftBy (getMaxLift convs) ret
@@ -139,8 +146,8 @@ inferStep lookupName = \case
 
         let conv1 = getConversion arg1Supplied arg1Declared
             conv2 = getConversion arg2Supplied arg2Declared
-        arg1Converted <- applyConversion conv1 arg1
-        arg2Converted <- applyConversion conv2 arg2
+        arg1Converted <- applyConversion conv1 (arg1, t1)
+        arg2Converted <- applyConversion conv2 (arg2, t2)
 
         ret <- whenJustElse "#TYPE" $ apply s (TVar tv)
         let ret' = liftBy (getMaxLift [conv1, conv2]) ret
@@ -161,7 +168,7 @@ inferStep lookupName = \case
         tSupplied <- whenJustElse "#TYPE" $ apply s t
         tDeclared <- whenJustElse "#TYPE" $ apply s t'
         let conv = getConversion tSupplied tDeclared
-        (0, xConverted) <- applyConversion conv x
+        (0, xConverted) <- applyConversion conv (x, t)
         pure (xConverted, t')
   where
     getTFunArgs (TFun args _) = args
