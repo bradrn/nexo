@@ -85,19 +85,14 @@ evalApp (Left OAnd  ) [VBool p, VBool q] = VBool $ p && q
 evalApp (Left OOr   ) [VBool p, VBool q] = VBool $ p || q
 evalApp _ _ = error "evalApp: bug in typechecker"
 
-broadcast :: MonadFail f => ([Value] -> Value) -> [((Int, Maybe Double), Value)] -> f Value
+broadcast :: MonadFail f => ([Value] -> Value) -> [(Int, Value)] -> f Value
 broadcast fn args
-    | all ((0==) . fst . fst) args = pure $ fn $ applyFactor <$> args
+    | all ((0==) . fst) args = pure $ fn $ snd <$> args
     | otherwise = fmap VList $ traverse (broadcast fn) =<< unliftSplit args
   where
-    applyFactor :: ((Int, Maybe Double), Value) -> Value
-    applyFactor ((_, Nothing), v) = v
-    applyFactor ((_, Just f), VNum n) = VNum (f*n)
-    applyFactor _ = error "broadcast: bug in typechecker"
-
-    unliftSplit :: MonadFail f => [((Int, Maybe Double), Value)] -> f [[((Int, Maybe Double), Value)]]
+    unliftSplit :: MonadFail f => [(Int, Value)] -> f [[(Int, Value)]]
     unliftSplit args' =
-        let levels = fst . fst <$> args'
+        let levels = fst <$> args'
             maxlevel = if null levels then 0 else maximum levels
             fills = catMaybes $ zipWith
                 (\level x -> if level == maxlevel then Just x else Nothing)
@@ -107,10 +102,10 @@ broadcast fn args
                 levels args'
         in fmap (replaceIn placeholders) <$> transposeVLists fills
 
-    transposeVLists :: MonadFail f => [((Int, Maybe Double), Value)] -> f [[((Int, Maybe Double), Value)]]
+    transposeVLists :: MonadFail f => [(Int, Value)] -> f [[(Int, Value)]]
     transposeVLists = transpose' . fmap extractVList
       where
-        extractVList ((i,f), VList l) = ((i-1,f),) <$> l
+        extractVList (i, VList l) = (i-1,) <$> l
         extractVList _ = error "broadcast: bug in typechecker"
 
         transpose' [] = pure []

@@ -16,6 +16,8 @@ extra-source-files:  README.md
 library
   hs-source-dirs:      src
   exposed-modules:     Nexo.Interpret
+                     , Nexo.Core.Solve
+                     , Nexo.Core.Substitute
                      , Nexo.Core.Type
                      , Nexo.Core.Typecheck
                      , Nexo.Expr.Parse

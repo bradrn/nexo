@@ -1,5 +1,6 @@
-{-# LANGUAGE DeriveFunctor   #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell    #-}
 
 module Nexo.Expr.Type where
 
@@ -18,14 +19,19 @@ data Type
     | TBool
     | TText
     | TVar TVar
-    -- | TFun FunType
+    | TFun [Type] Type
     | TList Type
     | TRecord (Map.Map String Type)
     deriving (Show, Eq, Ord)
 
 type TVar = String
-data FunType = FunType [Type] Type
-    deriving (Show, Eq, Ord)
+
+data PType = Forall [TVar] [TVar] Type
+    deriving (Show)
+
+-- | Warning: only use this in tests! This does not check for type
+-- variable equivalence
+deriving instance Eq PType
 
 meet :: Type -> Type -> Maybe Type
 meet t u | t == u = Just t

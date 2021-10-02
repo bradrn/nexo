@@ -14,7 +14,7 @@ data CoreExpr
     = CLit Value
     | CVar String
     | CRec (Map.Map String CoreExpr)
-    | CApp (Either Op String) [((Int, Maybe Double), CoreExpr)]
+    | CApp (Either Op String) [(Int, CoreExpr)]
     deriving (Show)
 
 makeBaseFunctor ''CoreExpr

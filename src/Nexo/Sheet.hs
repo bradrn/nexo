@@ -21,7 +21,7 @@ import Nexo.Expr.Type
 import Nexo.Interpret
 
 data ValueState
-    = ValuePresent Type Value
+    = ValuePresent PType Value
     | ValueError String
     | Invalidated
     deriving (Show)
@@ -31,18 +31,18 @@ display (ValuePresent _ v) = render v
 display (ValueError e) = '#' : e
 display Invalidated = "#INVALIDATED"
 
-fromEither :: Type -> Either String Value -> ValueState
+fromEither :: PType -> Either String Value -> ValueState
 fromEither t (Right val) = ValuePresent t val
 fromEither _ (Left err) = ValueError err
 
-toEither :: ValueState -> Either String (Type, Value)
+toEither :: ValueState -> Either String (PType, Value)
 toEither (ValuePresent t val) = Right (t, val)
 toEither (ValueError err) = Left err
 toEither Invalidated = Left "#INVALIDATED"
     
 data Cell = Cell
     { cellName :: String
-    , cellType :: Maybe Type
+    , cellType :: Maybe PType
     , cellExpr :: Expr
     , cellValue :: ValueState
     } deriving (Show)
@@ -88,21 +88,15 @@ evalSheet (Sheet s) =
             r <- lower $ typecheck (fmap fst . cacheByName) expr
             (v, t) <- case r of
                 Left e -> pure (ValueError e, Nothing)
-                Right (coreExpr, resultType) -> case type_ of
-                    Just type'
-                        | resultType /= type' ->
-                            -- give type error if types don't match
-                            pure (ValueError "#TYPE", type_)
-                    _ -> do
-                        -- otherwise infer type and return
-                        result <- lower $ evalExpr (fmap snd . cacheByName) coreExpr
-                        pure $ (,Just resultType) $ fromEither resultType result
+                Right (coreExpr, resultType) -> do
+                    result <- lower $ evalExpr (fmap snd . cacheByName) coreExpr
+                    pure $ (,Just resultType) $ fromEither resultType result
             modify' $ Map.insert ident (c { cellType = t, cellValue = v })
             pure v
         -- Else return cached value
         Just Cell{cellValue = v} -> pure v
 
-    cacheByName :: String -> Eval (Type, Value)
+    cacheByName :: String -> Eval (PType, Value)
     cacheByName name = do
         ident <- gets $
             flip Map.foldrWithKey Nothing $ \k v -> \case

@@ -42,12 +42,12 @@ hsParseLiteralList clen cinput successPtr = do
             let xp = Fix . XList $ Fix . XLit <$> values
             in poke successPtr cTrue >> newStablePtr xp
 
-hsMaybeParseType :: CString -> IO (StablePtr (Maybe Type))
+hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
 hsMaybeParseType cinput = do
     input <- GHC.peekCString utf8 cinput
-    newStablePtr $ parseMaybe pType input
+    newStablePtr $ parseMaybe pPType input
 
-hsMkCell :: CString -> StablePtr (Maybe Type) -> StablePtr Expr -> IO (StablePtr Cell)
+hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr Expr -> IO (StablePtr Cell)
 hsMkCell cname tptr xptr = do
     name <- GHC.peekCString utf8 cname
     type_ <- deRefStablePtr tptr
@@ -80,13 +80,14 @@ hsDisplayError ptr = deRefStablePtr ptr >>= \case
 
 hsExtractTopLevelType :: StablePtr ValueState -> IO CInt
 hsExtractTopLevelType ptr = deRefStablePtr ptr >>= \case
-    ValuePresent t _ -> return $ case t of
+    ValuePresent (Forall _ _ t) _ -> return $ case t of
         TNum _ -> 1
         TBool -> 2
         TText -> 3
         TVar _ -> 4
         TList _ -> 5
         TRecord _ -> 6
+        TFun _ _ -> 7
     _ -> return 0
 
 hsExtractValue :: StablePtr ValueState -> IO (StablePtr Value)
@@ -111,8 +112,8 @@ hsNullStablePtr = newStablePtr ()
 foreign export ccall hsNewSheet :: IO (StablePtr (IORef Sheet))
 foreign export ccall hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr Expr)
 foreign export ccall hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr Expr)
-foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe Type))
-foreign export ccall hsMkCell :: CString -> StablePtr (Maybe Type) -> StablePtr Expr -> IO (StablePtr Cell)
+foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
+foreign export ccall hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr Expr -> IO (StablePtr Cell)
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()
 foreign export ccall hsEvalSheet :: StablePtr (IORef Sheet) -> IO () 
 foreign export ccall hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState)

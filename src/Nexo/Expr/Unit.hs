@@ -1,6 +1,7 @@
 {-# LANGUAGE BlockArguments     #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE MultiWayIf         #-}
 {-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
@@ -51,7 +52,23 @@ concords :: [UnitDef] -> Maybe UnitDef
 concords [] = Nothing
 concords (u:us) = u <$ traverse (concord u) us
 
-type Unit = (Double, Map.Map String Int)
+-- | A unit in simplified representation: a factor multiplied by a map
+-- from base units ('Left' case) or type variables ('Right' case) to
+-- exponents.
+type Unit = (Double, Map.Map (Either String String) Int)
+
+unitToDef :: Unit -> UnitDef
+unitToDef (f, u) =
+    if | f==1, (u0:us) <- Map.toList u
+         -> foldr (UMul . term) (term u0) us
+       | otherwise
+         -> foldr (UMul . term) (UFactor f) (Map.toList u)
+  where
+    term :: (Either String String, Int) -> UnitDef
+    term (Left name, 1) = UName name
+    term (Right var, 1) = UVar var
+    term (Left name, n) = UExp (UName name) n
+    term (Right var, n) = UExp (UVar var) n
 
 simplify :: UnitDef -> Maybe Unit
 simplify = fmap (second $ Map.filter (/=0)) . cata \case
@@ -61,40 +78,41 @@ simplify = fmap (second $ Map.filter (/=0)) . cata \case
     UMulF u v -> liftA2 mul u v
     UDivF u v -> liftA2 div' u v
     UExpF u x -> exp' x <$> u
+    UVarF v -> Just (1, Map.singleton (Right v) 1)
   where
     mul (f, u) (g, v) = (f*g, Map.unionWith (+) u v)
     div' (f, u) (g, v) = (f/g, Map.unionWith (+) u $ negate <$> v)
     exp' x (f, u) = (f^x, (*x) <$> u)
 
-expandName :: String -> Maybe (Double, Map.Map String Int)
-expandName "s"   = Just (1, Map.singleton "s" 1)
-expandName "m"   = Just (1, Map.singleton "m" 1)
-expandName "g"   = Just (1, Map.singleton "g" 1)
-expandName "A"   = Just (1, Map.singleton "A" 1)
-expandName "mol" = Just (1, Map.singleton "mol" 1)
-expandName "cd"  = Just (1, Map.singleton "cd" 1)
+expandName :: String -> Maybe (Double, Map.Map (Either String String) Int)
+expandName "s"   = Just (1, Map.singleton (Left "s") 1)
+expandName "m"   = Just (1, Map.singleton (Left "m") 1)
+expandName "g"   = Just (1, Map.singleton (Left "g") 1)
+expandName "A"   = Just (1, Map.singleton (Left "A") 1)
+expandName "mol" = Just (1, Map.singleton (Left "mol") 1)
+expandName "cd"  = Just (1, Map.singleton (Left "cd") 1)
 expandName "rad" = Just (1, Map.empty)
-expandName "Hz"  = Just (1, Map.singleton "s" (-1))
-expandName "N"   = Just (1000, Map.fromList [("g", 1), ("m", 1), ("s", -2)])
-expandName "Pa"  = Just (1000, Map.fromList [("g", 1), ("m", -1), ("s", -2)])
-expandName "J"   = Just (1000, Map.fromList [("g", 1), ("m", 2), ("s", -2)])
-expandName "W"   = Just (1000, Map.fromList [("g", 1), ("m", 2), ("s", -3)])
-expandName "C"   = Just (1, Map.fromList [("s", 1), ("A", 1)])
-expandName "V"   = Just (1000, Map.fromList [("g", 1), ("m", 2), ("s", -3), ("A", -1)])
-expandName "F"   = Just (0.001, Map.fromList [("g", -1), ("m", -2), ("s", 4), ("A", 2)])
-expandName "Ω"   = Just (1000, Map.fromList [("g", 1), ("m", 2), ("s", -3), ("A", -2)])
-expandName "min" = Just (60, Map.singleton "s" 1)
-expandName "h"   = Just (3600, Map.singleton "s" 1)
-expandName "d"   = Just (86400, Map.singleton "s" 1)
+expandName "Hz"  = Just (1, Map.singleton (Left "s") (-1))
+expandName "N"   = Just (1000, Map.fromList [(Left "g", 1), (Left "m", 1), (Left "s", -2)])
+expandName "Pa"  = Just (1000, Map.fromList [(Left "g", 1), (Left "m", -1), (Left "s", -2)])
+expandName "J"   = Just (1000, Map.fromList [(Left "g", 1), (Left "m", 2), (Left "s", -2)])
+expandName "W"   = Just (1000, Map.fromList [(Left "g", 1), (Left "m", 2), (Left "s", -3)])
+expandName "C"   = Just (1, Map.fromList [(Left "s", 1), (Left "A", 1)])
+expandName "V"   = Just (1000, Map.fromList [(Left "g", 1), (Left "m", 2), (Left "s", -3), (Left "A", -1)])
+expandName "F"   = Just (0.001, Map.fromList [(Left "g", -1), (Left "m", -2), (Left "s", 4), (Left "A", 2)])
+expandName "Ω"   = Just (1000, Map.fromList [(Left "g", 1), (Left "m", 2), (Left "s", -3), (Left "A", -2)])
+expandName "min" = Just (60, Map.singleton (Left "s") 1)
+expandName "h"   = Just (3600, Map.singleton (Left "s") 1)
+expandName "d"   = Just (86400, Map.singleton (Left "s") 1)
 expandName "deg" = Just (pi/180, Map.empty)
-expandName "ha"  = Just (10000, Map.singleton "m" 2)
-expandName "L"   = Just (0.001, Map.singleton "m" 3)
-expandName "t"   = Just (1000000, Map.singleton "g" 1)
-expandName "in"  = Just (0.0254, Map.singleton "m" 1)
-expandName "ft"  = Just (0.3048, Map.singleton "m" 1)
-expandName "yd"  = Just (0.9144, Map.singleton "m" 1)
-expandName "mi"  = Just (1609.344, Map.singleton "m" 1)
-expandName "lb"  = Just (453.59237, Map.singleton "g" 1)
+expandName "ha"  = Just (10000, Map.singleton (Left "m") 2)
+expandName "L"   = Just (0.001, Map.singleton (Left "m") 3)
+expandName "t"   = Just (1000000, Map.singleton (Left "g") 1)
+expandName "in"  = Just (0.0254, Map.singleton (Left "m") 1)
+expandName "ft"  = Just (0.3048, Map.singleton (Left "m") 1)
+expandName "yd"  = Just (0.9144, Map.singleton (Left "m") 1)
+expandName "mi"  = Just (1609.344, Map.singleton (Left "m") 1)
+expandName "lb"  = Just (453.59237, Map.singleton (Left "g") 1)
 expandName _     = Nothing
 
 lookupPrefix :: String -> Maybe Double

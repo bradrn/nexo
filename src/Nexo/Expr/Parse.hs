@@ -1,6 +1,6 @@
 module Nexo.Expr.Parse
        ( parseMaybe
-       , pType
+       , pPType
        , pExpr
        , pValue
        ) where
@@ -14,6 +14,7 @@ import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )
 import qualified Data.Map.Strict as Map
 import qualified Text.Megaparsec.Char.Lexer as L
 
+import Nexo.Core.Substitute (generalise)
 import Nexo.Expr.Type
 import Nexo.Expr.Unit
 
@@ -69,6 +70,9 @@ pType = TNum <$> (symbol "Num" *> pUnitType)
     <|> TText <$ symbol "Text"
     <|> TRecord <$> paren (pRecordSpec pType)
     <|> TList <$> (symbol "List" *> pType)
+
+pPType :: Parser PType
+pPType = generalise <$> pType
 
 pValue :: Parser Value
 pValue = VNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
