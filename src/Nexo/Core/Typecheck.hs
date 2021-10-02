@@ -153,7 +153,16 @@ inferStep lookupName = \case
         case getConversion t (TNum Uno) of
             UnliftBy n _ -> pure (x, liftBy n $ TNum u)
             _            -> pure (x, TNum u)
+    XTApp x' pty -> do
+        t' <- instantiate pty
+        (x, t) <- x'
+        s <- whenJustElse "#TYPE" $ unify (Unify t t')
 
+        tSupplied <- whenJustElse "#TYPE" $ apply s t
+        tDeclared <- whenJustElse "#TYPE" $ apply s t'
+        let conv = getConversion tSupplied tDeclared
+        (0, xConverted) <- applyConversion conv x
+        pure (xConverted, t')
   where
     getTFunArgs (TFun args _) = args
     getTFunArgs _ = error "inferStep: bug in unifier"

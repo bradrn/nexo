@@ -83,6 +83,7 @@ data ExprF r
     | XFun String [r]
     | XOp Op r r
     | XUnit r UnitDef
+    | XTApp r PType
     deriving (Show, Functor)
 deriveShow1 ''ExprF
 

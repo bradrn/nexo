@@ -121,6 +121,7 @@ pTerm = wrap $ choice
     wrap p = do
         r <- p
         (Fix . XField r <$> (symbol "." *> pIdentifier))
+            <|> (Fix . XTApp r <$> (symbol ":" *> pPType))
             <|> (Fix . XUnit r <$> pUnit)
             <|> pure r
 

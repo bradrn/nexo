@@ -76,6 +76,11 @@ functions = testGroup "Functions"
         testEvalExpr "If([True,False], [[1,2],[3,4]], [10,20])" @?= Just
             ( Forall [] [] $ TList $ TList $ TNum Uno
             , VList [VList $ VNum <$> [1,20], VList $ VNum <$> [3,20]])
+    , testCase "Ascription" $ do
+        testEvalExpr "1 : Num" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "1 : Bool" @?= Nothing
+        testEvalExpr "[True,False] : List Bool" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
+        testEvalExpr "[True,False] : Bool" @?= Nothing
     ]
 
 units :: TestTree
@@ -86,6 +91,8 @@ units = testGroup "Units"
         testEvalExpr "1 m^-1"    @?= Just (Forall [] [] $ TNum (UExp (UName "m") (-1)), VNum 1)
         testEvalExpr "[1,2,3] s" @?= Just (Forall [] [] $ TList (TNum (UName "s")), VList (VNum <$> [1,2,3]))
     , testCase "Unit computation" $ do
+        testEvalExpr "(1 km) : Num<m>" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1000)
+        testEvalExpr "1 km : Num<s>" @?= Nothing
         testEvalExpr "1 m + 2 m" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 3)
         testEvalExpr "1 km + 2 m" @?= Just (Forall [] [] $ TNum (UMul (UName "m") (UFactor 1000)), VNum 1.002)
         testEvalExpr "1 s + 1 h" @?= Just (Forall [] [] $ TNum (UName "s"), VNum 3601)

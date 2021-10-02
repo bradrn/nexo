@@ -14,6 +14,7 @@ module Nexo.Sheet
 import Control.Monad.State.Strict
     ( execState, gets, modify', put, state, runState, State, StateT (..), MonadState )
 import Control.Monad.Trans (lift)
+import Data.Fix (Fix(Fix))
 import qualified Data.Map.Strict as Map
 
 import Nexo.Core.Typecheck
@@ -85,7 +86,8 @@ evalSheet (Sheet s) =
         Nothing -> pure $ ValueError "#IREF"
         -- Typecheck, evaluate, cache and return new value if invalidated
         Just c@Cell{cellType = type_, cellExpr = expr, cellValue = Invalidated} -> do
-            r <- lower $ typecheck (fmap fst . cacheByName) expr
+            let expr' = maybe expr (Fix . XTApp expr) type_
+            r <- lower $ typecheck (fmap fst . cacheByName) expr'
             (v, t) <- case r of
                 Left e -> pure (ValueError e, Nothing)
                 Right (coreExpr, resultType) -> do
