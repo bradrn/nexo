@@ -70,6 +70,12 @@ functions = testGroup "Functions"
         testEvalExpr "1 + 1" @?= Just (Forall [] [] $ TNum Uno, VNum 2)
         testEvalExpr "2 * 3" @?= Just (Forall [] [] $ TNum (UMul Uno Uno), VNum 6)
         testEvalExpr "5 < 1" @?= Just (Forall [] [] TBool, VBool False)
+    , testCase "Broadcasting" $ do
+        testEvalExpr "10 + [1,2,3]" @?= Just (Forall [] [] $ TList $ TNum Uno, VList $ VNum <$> [11,12,13])
+        testEvalExpr "[10,20,30] + [1,2,3]" @?= Just (Forall [] [] $ TList $ TNum Uno, VList $ VNum <$> [11,22,33])
+        testEvalExpr "If([True,False], [[1,2],[3,4]], [10,20])" @?= Just
+            ( Forall [] [] $ TList $ TList $ TNum Uno
+            , VList [VList $ VNum <$> [1,20], VList $ VNum <$> [3,20]])
     ]
 
 units :: TestTree
@@ -81,6 +87,8 @@ units = testGroup "Units"
         testEvalExpr "[1,2,3] s" @?= Just (Forall [] [] $ TList (TNum (UName "s")), VList (VNum <$> [1,2,3]))
     , testCase "Unit computation" $ do
         testEvalExpr "1 m + 2 m" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 3)
+        testEvalExpr "1 km + 2 m" @?= Just (Forall [] [] $ TNum (UMul (UName "m") (UFactor 1000)), VNum 1.002)
+        testEvalExpr "1 s + 1 h" @?= Just (Forall [] [] $ TNum (UName "s"), VNum 3601)
         testEvalExpr "1 m + 2 s" @?= Nothing
         testEvalExpr "1 m * 2 s" @?= Just (Forall [] [] $ TNum (UMul (UName "m") (UName "s")), VNum 2)
     ]
