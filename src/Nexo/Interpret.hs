@@ -1,96 +1,90 @@
 {-# LANGUAGE BlockArguments             #-}
 {-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 
-module Nexo.Interpret (evalExpr) where
+module Nexo.Interpret
+       ( Value(..)
+       , PrimClosure(..)
+       , render
+       , evalExpr
+       ) where
 
 import Data.Functor.Foldable (cata)
 
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes)
-import Data.List (transpose, sort)
+import Data.Foldable (for_)
+import Data.List (transpose, intercalate)
 
 import Nexo.Core.Type
 import Nexo.Expr.Type
+import Nexo.Env
 
-extractNum :: Value -> Double
-extractNum (VNum n) = n
-extractNum _ = error "unexpected value"
+data Value e
+    = VNum Double
+    | VBool Bool
+    | VText String
+    | VList [Value e]
+    | VRecord (Map.Map String (Value e))
+    | VClosure e [String] CoreExpr
+    | VPrimClosure (PrimClosure e)
+    deriving (Show)
 
-mean :: [Double] -> Double
-mean list = sum list / fromIntegral (length list)  -- same as VNum (sum (map extractNum list) / fromIntegral (length list))
+newtype PrimClosure e = PrimClosure ([Value e] -> Value e)
+instance Show (PrimClosure e) where
+    show _ = "\\PC"
 
-popStdDev :: [Double] -> Double
-popStdDev list =
-    let mu = mean list
-        diffSquared = map (square . subtract mu) list
-        meanSquared = mean diffSquared
-    in sqrt meanSquared
+instance Eq (Value e) where
+    (VNum n)    == (VNum n')    = n  == n'
+    (VBool b)   == (VBool b')   = b  == b'
+    (VText t)   == (VText t')   = t  == t'
+    (VList vs)  == (VList vs')  = vs == vs'
+    (VRecord r) == (VRecord r') = r  == r'
+    -- This is a naughty instance: functions are not even equal to
+    -- themselves! But I can’t see any other good way to do this
+    _ == _ = False
+
+render :: Value e -> String
+render (VNum n) = show n
+render (VBool b) = show b
+render (VText s) = show s
+render (VList vs) = "[" ++ intercalate "," (render <$> vs) ++ "]"
+render (VRecord vs) =
+    "(" ++ intercalate "," (renderField <$> Map.toList vs) ++ ")"
   where
-    -- could just do (^2), but that gives a defaulting warning
-    square x = x * x
+    renderField (k,v) = k ++ ":" ++ render v
+render VClosure{} = "λ…"
+render VPrimClosure{} = "λ…"
 
-median :: [Double] -> Double
-median list = 
-    let sortList = sort list
-        x = sortList !! (length sortList `quot` 2)
-        y = sortList !! ((length sortList `quot` 2) - 1)
-    in
-        if odd (length sortList)
-        then x
-        else (x + y) / 2
+fromLit :: Literal -> Value e
+fromLit (LNum n) = VNum n
+fromLit (LBool b) = VBool b
+fromLit (LText t) = VText t
 
-mode :: Ord a => [a] -> a
-mode = getMostFrequent . foldr (\val -> Map.insertWith (+) val 1) Map.empty
-  where
-    getMostFrequent :: Ord a => Map.Map a Int -> a
-    getMostFrequent freqs =
-        let highestFreq = maximum $ Map.elems freqs
-        in head $ Map.keys $ Map.filter (==highestFreq) freqs
+evalOp :: Op -> [Value e] -> Value e
+evalOp OPlus  [VNum i1, VNum i2] = VNum $ i1 + i2
+evalOp OMinus [VNum i1, VNum i2] = VNum $ i1 - i2
+evalOp OTimes [VNum i1, VNum i2] = VNum $ i1 * i2
+evalOp ODiv   [VNum i1, VNum i2] = VNum $ i1 / i2
+evalOp OEq    [v1     , v2     ] = VBool $ v1 == v2
+evalOp ONeq   [v1     , v2     ] = VBool $ v1 /= v2
+evalOp OGt    [VNum i1, VNum i2] = VBool $ i1 > i2
+evalOp OLt    [VNum i1, VNum i2] = VBool $ i1 < i2
+evalOp OAnd   [VBool p, VBool q] = VBool $ p && q
+evalOp OOr    [VBool p, VBool q] = VBool $ p || q
+evalOp _ _ = error "evalApp: bug in typechecker"
 
-evalApp :: Either Op String -> [Value] -> Value
-evalApp (Right "If") [cond, tcase, fcase] = case cond of -- If logical Function
-    VBool True -> tcase
-    VBool False -> fcase
-    _ -> error "evalFun: bug in typechecker"
-evalApp (Right "Mean") [VList list] = VNum $ mean (map extractNum list)
-evalApp (Right "Avg") [VList list] = VNum $ mean (map extractNum list)
-evalApp (Right "PopStdDev") [VList list] = VNum $ popStdDev (map extractNum list)
-evalApp (Right "Median") [VList list] = VNum $ median (map extractNum list)
-evalApp (Right "Mode") [VList list] = VNum $ mode (map extractNum list)
-evalApp (Right "Sin") [VNum n] = VNum $ sin n
-evalApp (Right "Cos") [VNum n] = VNum $ cos n
-evalApp (Right "Tan") [VNum n] = VNum $ tan n
-evalApp (Right "InvSin") [VNum n] = VNum $ asin n
-evalApp (Right "InvCos") [VNum n] = VNum $ acos n
-evalApp (Right "InvTan") [VNum n] = VNum $ atan n
-evalApp (Right "Root") [VNum n1, VNum n2] = VNum $ n1**(1/n2)
-evalApp (Right "Power") [VNum n1, VNum n2] = VNum $ n1**n2
-evalApp (Right "List") vs = VList vs                    -- List function used by Haskell for making lists
-evalApp (Right "GetField") [VRecord r, VText f]
-    | Just v <- Map.lookup f r = v
-evalApp (Left OPlus ) [VNum i1, VNum i2] = VNum $ i1 + i2
-evalApp (Left OMinus) [VNum i1, VNum i2] = VNum $ i1 - i2
-evalApp (Left OTimes) [VNum i1, VNum i2] = VNum $ i1 * i2
-evalApp (Left ODiv  ) [VNum i1, VNum i2] = VNum $ i1 / i2
-evalApp (Left OEq   ) [v1     , v2     ] = VBool $ v1 == v2
-evalApp (Left ONeq  ) [v1     , v2     ] = VBool $ v1 /= v2
-evalApp (Left OGt   ) [VNum i1, VNum i2] = VBool $ i1 > i2
-evalApp (Left OLt   ) [VNum i1, VNum i2] = VBool $ i1 < i2
-evalApp (Left OAnd  ) [VBool p, VBool q] = VBool $ p && q
-evalApp (Left OOr   ) [VBool p, VBool q] = VBool $ p || q
-evalApp _ _ = error "evalApp: bug in typechecker"
-
-broadcast :: MonadFail f => ([Value] -> Value) -> [(Int, Value)] -> f Value
+broadcast :: MonadFail f => ([Value e] -> f (Value e)) -> [(Int, Value e)] -> f (Value e)
 broadcast fn args
-    | all ((0==) . fst) args = pure $ fn $ snd <$> args
+    | all ((0==) . fst) args = fn $ snd <$> args
     | otherwise = fmap VList $ traverse (broadcast fn) =<< unliftSplit args
   where
-    unliftSplit :: MonadFail f => [(Int, Value)] -> f [[(Int, Value)]]
+    unliftSplit :: MonadFail f => [(Int, Value e)] -> f [[(Int, Value e)]]
     unliftSplit args' =
         let levels = fst <$> args'
             maxlevel = if null levels then 0 else maximum levels
@@ -102,7 +96,7 @@ broadcast fn args
                 levels args'
         in fmap (replaceIn placeholders) <$> transposeVLists fills
 
-    transposeVLists :: MonadFail f => [(Int, Value)] -> f [[(Int, Value)]]
+    transposeVLists :: MonadFail f => [(Int, Value e)] -> f [[(Int, Value e)]]
     transposeVLists = transpose' . fmap extractVList
       where
         extractVList (i, VList l) = (i-1,) <$> l
@@ -121,12 +115,29 @@ broadcast fn args
     replaceIn (Nothing:_) _ = error "broadcast: bug in unlifter"
     replaceIn (Just i:is) rs = i : replaceIn is rs
 
-evalExpr :: MonadFail f => (String -> f Value) -> CoreExpr -> f Value
-evalExpr lookupName = cata \case
-    CLitF v -> pure v
+evalExpr :: (MonadEnv (Value e) e f, Scoped e, MonadFail f) => CoreExpr -> f (Value e)
+evalExpr = cata \case
+    CLitF v -> pure $ fromLit v
     CVarF name -> lookupName name
     CRecF xs -> VRecord <$> sequenceA xs
-    CAppF fn es -> broadcast (evalApp fn) =<< traverse liftTuple es
+    CAppF (Left  op) es -> broadcast (pure . evalOp op) =<< traverse liftTuple es
+    CAppF (Right fn) es -> do
+        v <- lookupName fn
+        broadcast (fromClosure v) =<< traverse liftTuple es
   where
     liftTuple :: Functor f => (a, f b) -> f (a, b)
     liftTuple (a, b) = (a,) <$> b
+
+    fromClosure
+        :: ( MonadEnv (Value e) e m
+           , MonadFail m
+           , Scoped e)
+        => Value e -> ([Value e] -> m (Value e))
+    fromClosure (VClosure env' args x) vs = do
+        env <- getEnv
+        let innerEnv = env `addScope` env'
+        withEnv innerEnv $ do
+            for_ (zip args vs) extend
+            evalExpr x
+    fromClosure (VPrimClosure (PrimClosure f)) vs = pure $ f vs
+    fromClosure _ _ = error "fromClosure: bug in typechecker"

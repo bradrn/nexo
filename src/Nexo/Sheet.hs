@@ -1,11 +1,17 @@
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE TupleSections              #-}
 
 module Nexo.Sheet
        ( Sheet(..)
        , Cell(..)
        , ValueState(..)
+       , ValueEnv
+       , Eval
+       , Value'
+       , ValueState'
        , display
        , evalSheet
        , insert
@@ -20,32 +26,48 @@ import qualified Data.Map.Strict as Map
 import Nexo.Core.Typecheck
 import Nexo.Expr.Type
 import Nexo.Interpret
+import Nexo.Env
+import Nexo.Env.Std
 
-data ValueState
-    = ValuePresent PType Value
+data ValueState e
+    = ValuePresent PType (Value e)
     | ValueError String
     | Invalidated
     deriving (Show)
 
-display :: ValueState -> String
+display :: ValueState e -> String
 display (ValuePresent _ v) = render v
 display (ValueError e) = '#' : e
 display Invalidated = "#INVALIDATED"
 
-fromEither :: PType -> Either String Value -> ValueState
+fromEither :: PType -> Either String (Value e) -> ValueState e
 fromEither t (Right val) = ValuePresent t val
 fromEither _ (Left err) = ValueError err
 
-toEither :: ValueState -> Either String (PType, Value)
+toEither :: ValueState e -> Either String (PType, Value e)
 toEither (ValuePresent t val) = Right (t, val)
 toEither (ValueError err) = Left err
 toEither Invalidated = Left "#INVALIDATED"
     
+newtype ValueEnv m = ValueEnv (SheetEnv (Value (ValueEnv m)) m)
+    deriving (Show, Scoped)
+newtype InValueEnvT m a = InValueEnvT { unwrapValueEnv :: InSheetEnvT (Value (ValueEnv m)) m a }
+    deriving (Functor, Applicative, Monad, MonadFail)
+instance (Monad m, MonadFail m) => MonadEnv (Value (ValueEnv m)) (ValueEnv m) (InValueEnvT m) where
+    lookupName = InValueEnvT . lookupName
+    extend = InValueEnvT . extend
+    getEnv = InValueEnvT $ ValueEnv <$> getEnv
+    withEnv (ValueEnv e) (InValueEnvT m) = InValueEnvT $ withEnv e m
+
+    
+type ValueState' = ValueState (ValueEnv Eval)
+type Value' = Value (ValueEnv Eval)
+
 data Cell = Cell
     { cellName :: String
     , cellType :: Maybe PType
     , cellExpr :: Expr
-    , cellValue :: ValueState
+    , cellValue :: ValueState (ValueEnv Eval)
     } deriving (Show)
 
 newtype Sheet = Sheet { getSheet :: Map.Map Int Cell }
@@ -80,25 +102,28 @@ evalSheet (Sheet s) =
     go :: Map.Map Int Cell -> State (Map.Map Int Cell) ()
     go sheet = put sheet >> mapM_ cacheExpr (Map.keys sheet)
 
-    cacheExpr :: Int -> State (Map.Map Int Cell) ValueState
+    cacheExpr :: Int -> State (Map.Map Int Cell) (ValueState (ValueEnv Eval))
     cacheExpr ident = gets (Map.lookup ident) >>= \case
         -- Error if ident is unassigned
         Nothing -> pure $ ValueError "#IREF"
         -- Typecheck, evaluate, cache and return new value if invalidated
         Just c@Cell{cellType = type_, cellExpr = expr, cellValue = Invalidated} -> do
             let expr' = maybe expr (Fix . XTApp expr) type_
-            r <- lower $ typecheck (fmap fst . cacheByName) expr'
+                tenv = SheetEnv { lookupGlobal = fmap fst . cacheByName, locals = stdFnTs }
+            r <- lower $ runInSheetEnvT (typecheck expr') tenv
             (v, t) <- case r of
                 Left e -> pure (ValueError e, Nothing)
-                Right (coreExpr, resultType) -> do
-                    result <- lower $ evalExpr (fmap snd . cacheByName) coreExpr
+                Right ((coreExpr, resultType), _) -> do
+                    let venv :: SheetEnv (Value (ValueEnv Eval)) Eval
+                        venv = SheetEnv { lookupGlobal = fmap snd . cacheByName, locals = stdFnVals }
+                    result <- lower $ fst <$> runInSheetEnvT (unwrapValueEnv $ evalExpr coreExpr) venv
                     pure $ (,Just resultType) $ fromEither resultType result
             modify' $ Map.insert ident (c { cellType = t, cellValue = v })
             pure v
         -- Else return cached value
         Just Cell{cellValue = v} -> pure v
 
-    cacheByName :: String -> Eval (PType, Value)
+    cacheByName :: String -> Eval (PType, Value (ValueEnv Eval))
     cacheByName name = do
         ident <- gets $
             flip Map.foldrWithKey Nothing $ \k v -> \case

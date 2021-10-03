@@ -1,11 +1,12 @@
-{-# LANGUAGE FlexibleInstances            #-}
-{-# LANGUAGE LambdaCase                   #-}
-{-# LANGUAGE TupleSections                #-}
-{-# LANGUAGE TypeApplications             #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Nexo.Core.Typecheck where
 
-import Control.Monad.State.Strict (evalStateT, MonadTrans (lift))
+import Control.Monad.State.Strict (evalStateT)
 import Data.Bifunctor (second)
 import Data.Functor.Foldable (cata)
 
@@ -16,6 +17,7 @@ import Nexo.Core.Substitute
 import Nexo.Core.Type
 import Nexo.Expr.Type
 import Nexo.Expr.Unit
+import Nexo.Env
 
 data Conversion
     = MultiplyBy Double Conversion
@@ -55,7 +57,8 @@ getConversion t1 t2
     | otherwise = error "getConversion: bug in unifier"
 
 applyConversion
-    :: ( MonadFail m
+    :: ( MonadEnv PType e m
+       , MonadFail m
        , MonadFresh m
        )
     => Conversion -> (CoreExpr, Type) -> m (Int, CoreExpr)
@@ -72,8 +75,7 @@ applyConversion (MultiplyBy f c) (x, t) = do
         removeUnits _ = error "applyConversion: bug in inferStep"
         t' = removeUnits t
 
-    x' <- inferStep (error "applyConversion: bug in inferStep") $
-        XOp OTimes (pure (CLit (VNum f), TNum Uno)) (pure (x, t'))
+    x' <- inferStep $ XOp OTimes (pure (CLit (LNum f), TNum Uno)) (pure (x, t'))
     applyConversion c x'
 applyConversion IdConversion (x, _) = pure (0, x)
 
@@ -83,17 +85,16 @@ applyConversion IdConversion (x, _) = pure (0, x)
 -- arguments to their expected types so that it can apply conversions
 -- correctly.
 inferStep
-    :: ( MonadFail m
+    :: ( MonadEnv PType e m
+       , MonadFail m
        , MonadFresh m
        )
-    => (String -> m PType)
-    -> ExprF (m (CoreExpr, Type))
+    => ExprF (m (CoreExpr, Type))
     -> m (CoreExpr, Type)
-inferStep lookupName = \case
-    XLit n@(VNum _) -> pure (CLit n, TNum Uno)
-    XLit n@(VBool _) -> pure (CLit n, TBool)
-    XLit n@(VText _) -> pure (CLit n, TText)
-    XLit _ -> error "inferStep: bug in parser"
+inferStep = \case
+    XLit n@(LNum _) -> pure (CLit n, TNum Uno)
+    XLit n@(LBool _) -> pure (CLit n, TBool)
+    XLit n@(LText _) -> pure (CLit n, TText)
     XList xs' -> do
         xs <- sequenceA xs'
         tv <- TVar <$> fresh
@@ -115,9 +116,9 @@ inferStep lookupName = \case
         s <- whenJustElse "#TYPE" $ solve [c]
         -- then back-substitute
         t <- whenJustElse "#TYPE" $ apply s (TVar tv)
-        pure (CApp (Right "GetField") [(0,r), (0,CLit (VText f))], t)
+        pure (CApp (Right "GetField") [(0,r), (0,CLit (LText f))], t)
     XFun f args' -> do
-        tfun <- instantiate =<< fntype f
+        tfun <- instantiate =<< lookupName f
         (args, argts) <- unzip <$> sequenceA args'
         tv <- fresh
         s <- whenJustElse "#TYPE" $ solve [Subtype tfun (TFun argts (TVar tv))]
@@ -179,27 +180,8 @@ inferStep lookupName = \case
     liftBy 0 t = t
     liftBy n t = TList $ liftBy (n-1) t
 
-typecheck :: MonadFail f => (String -> f PType) -> Expr -> f (CoreExpr, PType)
-typecheck lookupName = flip evalStateT (0::Int) . fmap (second generalise) . cata (inferStep lookupName')
-  where
-    lookupName' = lift . lookupName
-
-fntype :: MonadFail m => String -> m PType
-fntype "If" = pure        $ Forall ["a"] [] $ TFun [TBool, TVar "a", TVar "a"] (TVar "a")
-fntype "Mean" = pure      $ Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u")
-fntype "Avg"  = pure      $ Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u")
-fntype "PopStdDev" = pure $ Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u")
-fntype "Median" = pure    $ Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u")
-fntype "Mode" = pure      $ Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u")
-fntype "Sin" = pure       $ Forall [] []    $ TFun [TNum (UName "rad")] (TNum Uno)
-fntype "Cos" = pure       $ Forall [] []    $ TFun [TNum (UName "rad")] (TNum Uno)
-fntype "Tan" = pure       $ Forall [] []    $ TFun [TNum (UName "rad")] (TNum Uno)
-fntype "InvSin" = pure    $ Forall [] []    $ TFun [TNum Uno] (TNum (UName "rad"))
-fntype "InvCos" = pure    $ Forall [] []    $ TFun [TNum Uno] (TNum (UName "rad"))
-fntype "InvTan" = pure    $ Forall [] []    $ TFun [TNum Uno] (TNum (UName "rad"))
-fntype "Root" = pure      $ Forall [] []    $ TFun [TNum Uno, TNum Uno] (TNum Uno)
-fntype "Power" = pure     $ Forall [] []    $ TFun [TNum Uno, TNum Uno] (TNum Uno)
-fntype _ = fail "#NAME"
+typecheck :: (MonadEnv PType e f, MonadFail f) => Expr -> f (CoreExpr, PType)
+typecheck = flip evalStateT (0::Int) . fmap (second generalise) . cata inferStep
 
 optype :: MonadFail m => Op -> m PType
 optype OEq    = pure $ Forall [] ["a"]      $ TFun [TVar "a", TVar "a"] (TVar "a")

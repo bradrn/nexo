@@ -42,23 +42,11 @@ meet _ _ = Nothing
 meets :: [Type] -> Maybe Type
 meets = foldr (\val acc -> acc >>= meet val) =<< listToMaybe
 
-data Value
-    = VNum Double
-    | VBool Bool
-    | VText String
-    | VList [Value]
-    | VRecord (Map.Map String Value)
-    deriving (Show, Eq)
-
-render :: Value -> String
-render (VNum n) = show n
-render (VBool b) = show b
-render (VText s) = show s
-render (VList vs) = "[" ++ intercalate "," (render <$> vs) ++ "]"
-render (VRecord vs) =
-    "(" ++ intercalate "," (renderField <$> Map.toList vs) ++ ")"
-  where
-    renderField (k,v) = k ++ ":" ++ render v
+data Literal
+    = LNum Double
+    | LBool Bool
+    | LText String
+    deriving (Show)
 
 -- | Operators
 data Op
@@ -75,7 +63,7 @@ data Op
     deriving (Show)
 
 data ExprF r
-    = XLit Value
+    = XLit Literal
     | XList [r]
     | XRecord (Map.Map String r)
     | XVar String
@@ -92,5 +80,5 @@ type Expr = Fix ExprF
 -- | An expression which returns zero. Useful when you need some Expr
 -- but don’t care which one (e.g. for C interop).
 zeroExpr :: Expr
-zeroExpr = Fix $ XLit $ VNum 0
+zeroExpr = Fix $ XLit $ LNum 0
 

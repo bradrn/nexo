@@ -2,7 +2,7 @@ module Nexo.Expr.Parse
        ( parseMaybe
        , pPType
        , pExpr
-       , pValue
+       , pLit
        ) where
 
 import Control.Monad.Combinators.Expr
@@ -74,10 +74,10 @@ pType = TNum <$> (symbol "Num" *> pUnitType)
 pPType :: Parser PType
 pPType = generalise <$> pType
 
-pValue :: Parser Value
-pValue = VNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
-    <|> VBool <$> pBool
-    <|> VText <$> lexeme pString
+pLit :: Parser Literal
+pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
+    <|> LBool <$> pBool
+    <|> LText <$> lexeme pString
   where
     pBool = True <$ symbol "True" <|> False <$ symbol "False"
 
@@ -112,7 +112,7 @@ pTerm = wrap $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
     , paren pExpr
-    , Fix . XLit <$> pValue
+    , Fix . XLit <$> pLit
     , Fix . XVar <$> pIdentifier
     , Fix . XList <$> sqparen (pExpr `sepBy` symbol ",")
     ]

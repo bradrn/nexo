@@ -1,5 +1,7 @@
 module Main where
 
+import Data.Traversable (for)
+
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -8,13 +10,26 @@ import qualified Data.Map.Strict as Map
 import Nexo.Expr.Parse
 import Nexo.Expr.Type
 import Nexo.Expr.Unit
+import Nexo.Interpret
 import Nexo.Sheet
 
-testEvalExpr :: String -> Maybe (PType, Value)
+testEvalExpr :: String -> Maybe (PType, Value (ValueEnv Eval))
 testEvalExpr xstr = do
     x <- parseMaybe pExpr xstr
     let c = Cell "test" Nothing x Invalidated
         s = Sheet $ Map.singleton 0 c
+        Sheet s' = evalSheet s
+    val <- cellValue <$> Map.lookup 0 s'
+    case val of
+        ValuePresent t v -> Just (t, v)
+        _ -> Nothing
+
+testEvalExprs :: [(String, String)] -> Maybe (PType, Value (ValueEnv Eval))
+testEvalExprs xstrs = do
+    cs <- for xstrs $ \(n, xstr) -> do
+        x <- parseMaybe pExpr xstr
+        pure $ Cell n Nothing x Invalidated
+    let s = Sheet $ Map.fromList $ zip [0..] cs
         Sheet s' = evalSheet s
     val <- cellValue <$> Map.lookup 0 s'
     case val of
@@ -30,6 +45,7 @@ tests = testGroup "Tests"
     , values
     , functions
     , units
+    , multis
     ]
 
 literals :: TestTree
@@ -99,4 +115,12 @@ units = testGroup "Units"
         testEvalExpr "1 m + 2 s" @?= Nothing
         testEvalExpr "1 m * 2 s" @?= Just (Forall [] [] $ TNum (UMul (UName "m") (UName "s")), VNum 2)
         testEvalExpr "[1,2,3] m + [4,5,6] km" @?= Just (Forall [] [] (TList (TNum (UName "m"))),VList [VNum 4001,VNum 5002,VNum 6003])
+    ]
+
+multis :: TestTree
+multis = testGroup "Multiple cells"
+    [ testCase "Cell references" $ do
+        testEvalExprs [("test", "ref+1"), ("ref", "2")] @?=
+            Just (Forall [] [] $ TNum Uno, VNum 3)
+        testEvalExprs [("test", "ref+1"), ("ref", "2 m")] @?= Nothing
     ]

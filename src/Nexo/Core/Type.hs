@@ -11,7 +11,7 @@ import qualified Data.Map.Strict as Map
 import Nexo.Expr.Type
 
 data CoreExpr
-    = CLit Value
+    = CLit Literal
     | CVar String
     | CRec (Map.Map String CoreExpr)
     | CApp (Either Op String) [(Int, CoreExpr)]

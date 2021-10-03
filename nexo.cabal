@@ -20,6 +20,8 @@ library
                      , Nexo.Core.Substitute
                      , Nexo.Core.Type
                      , Nexo.Core.Typecheck
+                     , Nexo.Env
+                     , Nexo.Env.Std
                      , Nexo.Expr.Parse
                      , Nexo.Expr.Type
                      , Nexo.Expr.Unit

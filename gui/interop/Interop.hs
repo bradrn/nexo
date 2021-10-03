@@ -16,6 +16,7 @@ import qualified Data.Map.Strict as Map
 
 import Nexo.Expr.Parse
 import Nexo.Expr.Type
+import Nexo.Interpret (Value(..), render)
 import Nexo.Sheet
 
 hsNewSheet :: IO (StablePtr (IORef Sheet))
@@ -36,7 +37,7 @@ hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr Expr)
 hsParseLiteralList clen cinput successPtr = do
     cinputs <- peekArray (fromIntegral clen) cinput
     inputs <- traverse (GHC.peekCString utf8) cinputs
-    case traverse (parseMaybe pValue) inputs of
+    case traverse (parseMaybe pLit) inputs of
         Nothing -> poke successPtr cFalse >> newStablePtr zeroExpr
         Just values ->
             let xp = Fix . XList $ Fix . XLit <$> values
@@ -65,7 +66,7 @@ hsEvalSheet ptr = do
     ref <- deRefStablePtr ptr
     modifyIORef' ref evalSheet
 
-hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState)
+hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState')
 hsQuery k ptr successPtr = do
     ref <- deRefStablePtr ptr
     Sheet s <- readIORef ref
@@ -73,12 +74,12 @@ hsQuery k ptr successPtr = do
         Nothing -> poke successPtr cFalse >> newStablePtr Invalidated
         Just cl -> poke successPtr cTrue  >> newStablePtr (cellValue cl)
 
-hsDisplayError :: StablePtr ValueState -> IO CString
+hsDisplayError :: StablePtr ValueState' -> IO CString
 hsDisplayError ptr = deRefStablePtr ptr >>= \case
     ValuePresent _ _ -> GHC.newCString utf8 ""
     vs -> GHC.newCString utf8 $ display vs
 
-hsExtractTopLevelType :: StablePtr ValueState -> IO CInt
+hsExtractTopLevelType :: StablePtr ValueState' -> IO CInt
 hsExtractTopLevelType ptr = deRefStablePtr ptr >>= \case
     ValuePresent (Forall _ _ t) _ -> return $ case t of
         TNum _ -> 1
@@ -90,15 +91,15 @@ hsExtractTopLevelType ptr = deRefStablePtr ptr >>= \case
         TFun _ _ -> 7
     _ -> return 0
 
-hsExtractValue :: StablePtr ValueState -> IO (StablePtr Value)
+hsExtractValue :: StablePtr ValueState' -> IO (StablePtr Value')
 hsExtractValue ptr = deRefStablePtr ptr >>= \case
     ValuePresent _ v -> newStablePtr v
     _ -> error "hsExtractValue: attempted to get nonexistent value"
 
-hsRenderValue :: StablePtr Value -> IO CString
+hsRenderValue :: StablePtr Value' -> IO CString
 hsRenderValue = GHC.newCString utf8 . render <=< deRefStablePtr
 
-hsValueToList :: StablePtr Value -> Ptr CInt -> IO (Ptr (StablePtr Value))
+hsValueToList :: StablePtr Value' -> Ptr CInt -> IO (Ptr (StablePtr Value'))
 hsValueToList ptr lptr = deRefStablePtr ptr >>= \case
     VList vs -> do
         poke lptr $ genericLength vs
@@ -116,10 +117,10 @@ foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
 foreign export ccall hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr Expr -> IO (StablePtr Cell)
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()
 foreign export ccall hsEvalSheet :: StablePtr (IORef Sheet) -> IO () 
-foreign export ccall hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState)
-foreign export ccall hsDisplayError :: StablePtr ValueState -> IO CString
-foreign export ccall hsExtractTopLevelType :: StablePtr ValueState -> IO CInt
-foreign export ccall hsExtractValue :: StablePtr ValueState -> IO (StablePtr Value)
-foreign export ccall hsRenderValue :: StablePtr Value -> IO CString
-foreign export ccall hsValueToList :: StablePtr Value -> Ptr CInt -> IO (Ptr (StablePtr Value))
+foreign export ccall hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState')
+foreign export ccall hsDisplayError :: StablePtr ValueState' -> IO CString
+foreign export ccall hsExtractTopLevelType :: StablePtr ValueState' -> IO CInt
+foreign export ccall hsExtractValue :: StablePtr ValueState' -> IO (StablePtr Value')
+foreign export ccall hsRenderValue :: StablePtr Value' -> IO CString
+foreign export ccall hsValueToList :: StablePtr Value' -> Ptr CInt -> IO (Ptr (StablePtr Value'))
 foreign export ccall hsNullStablePtr :: IO (StablePtr ())
