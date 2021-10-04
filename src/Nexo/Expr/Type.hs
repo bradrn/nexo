@@ -67,6 +67,7 @@ data ExprF r
     | XList [r]
     | XRecord (Map.Map String r)
     | XVar String
+    | XLam [String] r
     | XField r String
     | XFun String [r]
     | XOp Op r r

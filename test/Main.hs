@@ -97,6 +97,12 @@ functions = testGroup "Functions"
         testEvalExpr "1 : Bool" @?= Nothing
         testEvalExpr "[True,False] : List Bool" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
         testEvalExpr "[True,False] : Bool" @?= Nothing
+    , testCase "Lambdas" $ do
+        fmap fst (testEvalExpr "a -> a") @?= Just (Forall ["a"] [] $ TFun [TVar "a"] $ TVar "a")
+        fmap fst (testEvalExpr "(a,b) -> a") @?= Just (Forall ["a","b"] [] $ TFun [TVar "a",TVar "b"] $ TVar "a")
+        fmap fst (testEvalExpr "a -> x") @?= Nothing
+        fmap fst (testEvalExpr "num -> (num+1)") @?= Just (Forall [] [] $ TFun [TNum Uno] $ TNum Uno)
+        fmap fst (testEvalExpr "(num,num2) -> (num+num2)") @?= Just (Forall [] ["c"] $ TFun [TNum (UVar "c"),TNum (UVar "c")] $ TNum (UVar "c"))
     ]
 
 units :: TestTree
@@ -123,4 +129,7 @@ multis = testGroup "Multiple cells"
         testEvalExprs [("test", "ref+1"), ("ref", "2")] @?=
             Just (Forall [] [] $ TNum Uno, VNum 3)
         testEvalExprs [("test", "ref+1"), ("ref", "2 m")] @?= Nothing
+    , testCase "Custom functions" $
+        testEvalExprs [("test", "AddOne(1)"), ("AddOne", "n -> (n+1)")] @?=
+            Just (Forall [] [] $ TNum Uno, VNum 2)
     ]

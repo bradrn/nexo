@@ -84,6 +84,12 @@ pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
     pString :: Parser String
     pString = char '"' *> (L.charLiteral `manyTill` char '"')
 
+pLam :: Parser Expr
+pLam = (Fix .) . XLam <$> args <* symbol "->" <*> pTerm
+  where
+    args = paren (pIdentifier `sepBy` symbol ",")
+        <|> (pure <$> pIdentifier)
+    
 operatorTable :: [[Operator Parser Expr]]
 operatorTable =
     [ [ binary "*" $ wrap $ XOp OTimes
@@ -111,6 +117,7 @@ pTerm :: Parser Expr
 pTerm = wrap $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
+    , try pLam
     , paren pExpr
     , Fix . XLit <$> pLit
     , Fix . XVar <$> pIdentifier

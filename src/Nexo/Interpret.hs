@@ -14,7 +14,7 @@ module Nexo.Interpret
        , evalExpr
        ) where
 
-import Data.Functor.Foldable (cata)
+import Data.Functor.Foldable (para)
 
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes)
@@ -116,17 +116,20 @@ broadcast fn args
     replaceIn (Just i:is) rs = i : replaceIn is rs
 
 evalExpr :: (MonadEnv (Value e) e f, Scoped e, MonadFail f) => CoreExpr -> f (Value e)
-evalExpr = cata \case
+evalExpr = para \case
     CLitF v -> pure $ fromLit v
     CVarF name -> lookupName name
-    CRecF xs -> VRecord <$> sequenceA xs
+    CLamF args (x, _) -> do
+        env <- getEnv
+        pure $ VClosure env args x
+    CRecF xs -> VRecord <$> sequenceA (snd <$> xs)
     CAppF (Left  op) es -> broadcast (pure . evalOp op) =<< traverse liftTuple es
     CAppF (Right fn) es -> do
         v <- lookupName fn
         broadcast (fromClosure v) =<< traverse liftTuple es
   where
-    liftTuple :: Functor f => (a, f b) -> f (a, b)
-    liftTuple (a, b) = (a,) <$> b
+    liftTuple :: Functor f => (a, (x, f b)) -> f (a, b)
+    liftTuple (a, (_, b)) = (a,) <$> b
 
     fromClosure
         :: ( MonadEnv (Value e) e m

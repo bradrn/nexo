@@ -6,9 +6,12 @@
 
 module Nexo.Core.Typecheck where
 
+import Control.Monad ((<=<))
 import Control.Monad.State.Strict (evalStateT)
 import Data.Bifunctor (second)
+import Data.Foldable (for_)
 import Data.Functor.Foldable (cata)
+import Data.Traversable (for)
 
 import qualified Data.Map.Strict as Map
 
@@ -60,6 +63,7 @@ applyConversion
     :: ( MonadEnv PType e m
        , MonadFail m
        , MonadFresh m
+       , MonadSubst m
        )
     => Conversion -> (CoreExpr, Type) -> m (Int, CoreExpr)
 applyConversion (UnliftBy 0 c) (x, t) = applyConversion c (x, t)
@@ -88,6 +92,7 @@ inferStep
     :: ( MonadEnv PType e m
        , MonadFail m
        , MonadFresh m
+       , MonadSubst m
        )
     => ExprF (m (CoreExpr, Type))
     -> m (CoreExpr, Type)
@@ -101,6 +106,7 @@ inferStep = \case
         let cs = Unify tv . snd <$> xs
         s <- whenJustElse "#TYPE" $ solve cs
         t <- whenJustElse "#TYPE" $ apply s tv
+        applyToEnv s
         pure (CApp (Right "List") $ (0,) . fst <$> xs, TList t)
     XRecord r' -> do
         r <- sequenceA r'
@@ -108,6 +114,14 @@ inferStep = \case
     XVar v -> do
         t <- instantiate =<< lookupName v
         pure (CVar v, t)
+    XLam args x -> do
+        tvs <- for args $ \arg -> (arg,) <$> fresh
+        ((retc, rett), argts) <- scope $ do
+            for_ tvs $ extend . second (Forall [] [] . TVar)
+            ret <- x
+            argts <- traverse (instantiate <=< lookupName) args
+            pure (ret, argts)
+        pure (CLam args retc, TFun argts rett)
     XField x f -> do
         (r, rt) <- x
         tv <- fresh
@@ -116,6 +130,7 @@ inferStep = \case
         s <- whenJustElse "#TYPE" $ solve [c]
         -- then back-substitute
         t <- whenJustElse "#TYPE" $ apply s (TVar tv)
+        applyToEnv s
         pure (CApp (Right "GetField") [(0,r), (0,CLit (LText f))], t)
     XFun f args' -> do
         tfun <- instantiate =<< lookupName f
@@ -132,6 +147,7 @@ inferStep = \case
         
         ret <- whenJustElse "#TYPE" $ apply s (TVar tv)
         let ret' = liftBy (getMaxLift convs) ret
+        applyToEnv s
 
         pure (CApp (Right f) argsConverted, ret')
     XOp o arg1' arg2' -> do
@@ -152,6 +168,7 @@ inferStep = \case
 
         ret <- whenJustElse "#TYPE" $ apply s (TVar tv)
         let ret' = liftBy (getMaxLift [conv1, conv2]) ret
+        applyToEnv s
 
         pure (CApp (Left o) [arg1Converted,arg2Converted], ret')
     XUnit x' u -> do
@@ -170,6 +187,7 @@ inferStep = \case
         tDeclared <- whenJustElse "#TYPE" $ apply s t'
         let conv = getConversion tSupplied tDeclared
         (0, xConverted) <- applyConversion conv (x, t)
+        applyToEnv s
         pure (xConverted, t')
   where
     getTFunArgs (TFun args _) = args
@@ -180,7 +198,7 @@ inferStep = \case
     liftBy 0 t = t
     liftBy n t = TList $ liftBy (n-1) t
 
-typecheck :: (MonadEnv PType e f, MonadFail f) => Expr -> f (CoreExpr, PType)
+typecheck :: (MonadEnv PType e f, MonadFail f, MonadSubst f) => Expr -> f (CoreExpr, PType)
 typecheck = flip evalStateT (0::Int) . fmap (second generalise) . cata inferStep
 
 optype :: MonadFail m => Op -> m PType
