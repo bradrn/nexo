@@ -3,6 +3,7 @@
 module Nexo.Core.Substitute where
 
 import Control.Monad (replicateM)
+import Control.Monad.Fail (MonadFail)
 import Control.Monad.State.Strict (StateT, MonadState (get, put))
 import Data.Traversable (for)
 

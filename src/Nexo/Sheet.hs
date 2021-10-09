@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
@@ -17,10 +18,16 @@ module Nexo.Sheet
        , insert
        ) where
 
+import Prelude hiding (fail)
+import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.State.Strict
     ( execState, gets, modify', put, state, runState, State, StateT (..), MonadState )
 import Control.Monad.Trans (lift)
-import Data.Fix (Fix(Fix))
+#if MIN_VERSION_recursion_schemes(5,2,0)
+import Data.Fix (Fix(..))
+#else
+import Data.Functor.Foldable (Fix(..))
+#endif
 import qualified Data.Map.Strict as Map
 
 import Nexo.Core.Typecheck

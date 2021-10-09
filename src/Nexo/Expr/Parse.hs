@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Nexo.Expr.Parse
        ( parseMaybe
        , pPType
@@ -6,7 +8,11 @@ module Nexo.Expr.Parse
        ) where
 
 import Control.Monad.Combinators.Expr
+#if MIN_VERSION_recursion_schemes(5,2,0)
 import Data.Fix (Fix(..))
+#else
+import Data.Functor.Foldable (Fix(..))
+#endif
 import Data.Void ( Void )
 import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty )
 import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )

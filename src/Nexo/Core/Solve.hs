@@ -4,6 +4,7 @@
 module Nexo.Core.Solve where
 
 import Control.Monad (join)
+import Control.Monad.Fail (MonadFail)
 import Data.Traversable (for)
 
 import qualified Data.Map.Strict as Map

@@ -9,6 +9,7 @@
 
 module Nexo.Env where
 
+import Control.Monad.Fail (MonadFail)
 import Control.Monad.State.Strict (StateT(..), MonadState(..), MonadTrans(lift), modify)
 import Data.Set (unions)
 

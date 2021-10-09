@@ -14,6 +14,7 @@ module Nexo.Interpret
        , evalExpr
        ) where
 
+import Control.Monad.Fail (MonadFail)
 import Data.Functor.Foldable (para)
 
 import qualified Data.Map.Strict as Map

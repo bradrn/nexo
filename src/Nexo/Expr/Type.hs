@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveFunctor      #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
@@ -5,7 +6,11 @@
 module Nexo.Expr.Type where
 
 import Data.Deriving (deriveShow1)
+#if MIN_VERSION_recursion_schemes(5,2,0)
 import Data.Fix (Fix(..))
+#else
+import Data.Functor.Foldable (Fix(..))
+#endif
 import Data.List (intercalate)
 import Data.Maybe (listToMaybe)
 

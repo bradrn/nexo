@@ -7,6 +7,7 @@
 module Nexo.Core.Typecheck where
 
 import Control.Monad ((<=<))
+import Control.Monad.Fail (MonadFail)
 import Control.Monad.State.Strict (evalStateT)
 import Data.Bifunctor (second)
 import Data.Foldable (for_)
