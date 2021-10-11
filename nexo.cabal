@@ -43,6 +43,6 @@ test-suite nexo-test
   main-is:             Main.hs
   build-depends:       base >= 4.7 && < 5
                      , nexo
-                     , tasty >= 1.4 && < 1.5
-                     , tasty-hunit >= 0.10 && < 1.11
+                     , tasty >= 1.2 && < 1.5
+                     , tasty-hunit >= 0.10 && < 0.11
                      , containers >= 0.6 && < 0.7
