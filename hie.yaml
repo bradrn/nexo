@@ -6,3 +6,10 @@ cradle:
       component: "nexo:test:nexo-test"
     - path: "./gui/interop/"
       component: "nexo-interop:lib"
+  cabal:
+    - path: "./src/"
+      component: "lib:nexo"
+    - path: "./test/"
+      component: "test:nexo-test"
+    - path: "./gui/web/"
+      component: "exe:web"
