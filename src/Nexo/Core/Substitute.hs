@@ -2,8 +2,9 @@
 
 module Nexo.Core.Substitute where
 
+import Prelude hiding (fail)
 import Control.Monad (replicateM)
-import Control.Monad.Fail (MonadFail)
+import Control.Monad.Fail (MonadFail(..))
 import Control.Monad.State.Strict (StateT, MonadState (get, put))
 import Data.Traversable (for)
 
