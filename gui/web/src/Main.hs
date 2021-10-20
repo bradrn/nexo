@@ -1,33 +1,96 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE QuasiQuotes         #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE RecursiveDo         #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeApplications    #-}
 module Main where
 
-import Data.Text (pack, unpack)
+import Control.Applicative (liftA2)
+import Control.Monad.Fix (MonadFix)
+import Data.String (IsString(fromString))
+import Data.Text (Text, pack, unpack)
+import Text.Lucius (renderCss, lucius)
 
 import qualified Data.Map.Strict as Map
+import qualified Data.Text.Lazy as TL
 
 import Nexo.Expr.Parse
+import Nexo.Expr.Type
 import Nexo.Sheet
 
 import Reflex.Dom hiding (display)
+import Data.Maybe (fromMaybe)
 
-evalOneExpr xstr = do
-    x <- parseMaybe pExpr xstr
-    let c = Cell "test" Nothing x Invalidated
-        s = Sheet $ Map.singleton 0 c
-        Sheet s' = evalSheet s
-    cellValue <$> Map.lookup 0 s'
+cell ::
+    ( DomBuilder t m
+    , MonadHold t m
+    , PostBuild t m
+    )
+    => Dynamic t Text
+    -> m (Dynamic t Cell)
+cell valueDyn = elClass "form" "cell" $ do
+    label "Name"
+    iName <- inputElement def
+    br
+    label "Type"
+    iType <- inputElement def
+    br
+    label "Expr"
+    iExpr <- inputElement def
+    br
+    label "Value"
+    dynText valueDyn
+
+    let nameEv = _inputElement_input iName
+        typeEv = _inputElement_input iType
+        exprEv = _inputElement_input iExpr
+
+    let typeParsedEv = parseMaybe pPType . unpack <$> typeEv
+        exprParsedEv = mapMaybe (parseMaybe pExpr . unpack) exprEv
+
+    nameDyn <- holdDyn "" nameEv
+    typeDyn <- holdDyn Nothing typeParsedEv
+    exprDyn <- holdDyn zeroExpr exprParsedEv
+
+    return $ Cell <$> (unpack <$> nameDyn) <*> typeDyn <*> exprDyn <*> pure Invalidated
+  where
+    label = el "label" . text
+    br = el "br" blank
+
+sheet :: forall t m.
+    ( DomBuilder t m
+    , MonadHold t m
+    , MonadFix m
+    , PostBuild t m
+    , Reflex t
+    ) => m ()
+sheet = do
+    addEv <- button "Add"
+    el "br" blank
+    idsDyn <- updated @_ @Int <$> count addEv
+
+    cellIdsDyn <- foldDyn (:) [] idsDyn
+    rec
+        let -- partial: assumes the identifier is valid
+            getCellValue :: Int -> Dynamic t Text
+            getCellValue ident = ffor sheetDyn $ \(Sheet s) ->
+                pack $ fromMaybe "" $ display . cellValue <$> Map.lookup ident s
+
+        cellsDyn <- simpleList cellIdsDyn $ \ident ->
+            (liftA2 (,) ident) <$> cell (getCellValue =<< ident)
+        let cellsEv = switchDyn $ leftmost . fmap updated <$> cellsDyn
+        sheetDyn <- foldDyn (\v -> evalSheet . uncurry insert v) (Sheet Map.empty) cellsEv
+    blank
+
+style :: IsString s => s
+style = fromString $ TL.unpack $ renderCss $ ($ undefined) [lucius|
+.cell {
+    display: inline-block;
+    border: 1px solid;
+}
+|]
 
 main :: IO ()
-main = mainWidget $ el "div" $ do
-    t <- textInput def
-
-    -- adapted from https://qfpl.io/posts/reflex/basics/dom/
-    let bValue    = current $ _textInput_value t
-        eKeypress = _textInput_keypress t
-        isKey k   = (== k) . keyCodeLookup . fromIntegral
-        eEnter    = ffilter (isKey Enter) eKeypress
-        eAtEnter  = bValue <@ eEnter
-
-    inputText <- holdDyn "" eAtEnter
-
-    dynText $ (maybe "" (pack . display) . evalOneExpr . unpack) <$> inputText
+main = mainWidgetWithCss style sheet
