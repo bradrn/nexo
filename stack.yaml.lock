@@ -11,6 +11,124 @@ packages:
       sha256: 5bf20952472d930323766d250f5fbbe3fe6f2cd3d931e5cf7b62a238ab2099ff
   original:
     hackage: regex-posix-clib-2.7@sha256:998fca06da3d719818f0691ef0b8b9b7375afeea228cb08bd9e2db53f96b0cd7,1232
+- completed:
+    subdir: reflex-dom
+    name: reflex-dom
+    version: 0.6.1.0
+    git: https://github.com/reflex-frp/reflex-dom.git
+    pantry-tree:
+      size: 808
+      sha256: ecaf4f41dbbc9c2dc749a81a21d10a2e4304dbf1224f81255660e6b30964e437
+    commit: d0e0f3ebaf0ca42927cd36c31a553debd80495d7
+  original:
+    subdir: reflex-dom
+    git: https://github.com/reflex-frp/reflex-dom.git
+    commit: d0e0f3ebaf0ca42927cd36c31a553debd80495d7
+- completed:
+    hackage: reflex-0.8.1.1@sha256:bfa905e76b626991468f10690f301ae303c79de125da25436584f192687cf621,11940
+    pantry-tree:
+      size: 4587
+      sha256: 34194113da20f8a9b1b93246bb253056b0663f70d3aad80921ec0ca8433f2c63
+  original:
+    hackage: reflex-0.8.1.1@sha256:bfa905e76b626991468f10690f301ae303c79de125da25436584f192687cf621,11940
+- completed:
+    hackage: reflex-dom-core-0.6.2.1@sha256:7e5024804b921f639ce6df33af5244c483b593e32cef1fde767ef9dfebf4973f,7834
+    pantry-tree:
+      size: 2735
+      sha256: 89f2291540d30424d3c08bedbf86078c6989347ea60306b680475ac4a95f40f3
+  original:
+    hackage: reflex-dom-core-0.6.2.1@sha256:7e5024804b921f639ce6df33af5244c483b593e32cef1fde767ef9dfebf4973f,7834
+- completed:
+    hackage: constraints-0.12@sha256:71c7999d7fa01d8941f08d37d4c107c6b1bcbd0306e234157557b9b096b7f1be,2217
+    pantry-tree:
+      size: 867
+      sha256: 40bb55ad831b213078b79f54bb09c5a2200433dc2a495814444593fb00112834
+  original:
+    hackage: constraints-0.12@sha256:71c7999d7fa01d8941f08d37d4c107c6b1bcbd0306e234157557b9b096b7f1be,2217
+- completed:
+    hackage: ghcjs-dom-0.9.4.0@sha256:c2b3d25145e24b66a8a5078c0d750305b577aeff05957cf282d74f6e8d2424dd,32082
+    pantry-tree:
+      size: 357
+      sha256: de76dd6924d6ad9124e836a0fa66a0338f585acbcbfbffd90e8357d1b6b8fbb4
+  original:
+    hackage: ghcjs-dom-0.9.4.0@sha256:c2b3d25145e24b66a8a5078c0d750305b577aeff05957cf282d74f6e8d2424dd,32082
+- completed:
+    hackage: jsaddle-0.9.8.0@sha256:d7acf2247cc93c2d8d0959eccf627077c4175c81b762c8d107c7006dda662d05,4418
+    pantry-tree:
+      size: 4329
+      sha256: 45c8931120722d76150dc14b4092eeef73002a4c3bab6ac1b5b40650dd4b9b0f
+  original:
+    hackage: jsaddle-0.9.8.0@sha256:d7acf2247cc93c2d8d0959eccf627077c4175c81b762c8d107c7006dda662d05,4418
+- completed:
+    hackage: monoidal-containers-0.6.0.1@sha256:f56ea8fe91ff93da140e38b8dab4b94437b901818c13ba72fc7fc802290323ee,2583
+    pantry-tree:
+      size: 569
+      sha256: 3a43dbbb1839521aae37a2baa3fb3ad0cc61a0a8fc4e3aec1f7dda15b92a0279
+  original:
+    hackage: monoidal-containers-0.6.0.1@sha256:f56ea8fe91ff93da140e38b8dab4b94437b901818c13ba72fc7fc802290323ee,2583
+- completed:
+    hackage: patch-0.0.4.0@sha256:dc50de424d9ded983651f073b3862c190d927f8b155bececeb7b518cb5f99f5a,2486
+    pantry-tree:
+      size: 977
+      sha256: 39206107569d93fbb1824bf1d7b547d8f678284b6cc2bb678c8a1dadf19e9d22
+  original:
+    hackage: patch-0.0.4.0@sha256:dc50de424d9ded983651f073b3862c190d927f8b155bececeb7b518cb5f99f5a,2486
+- completed:
+    hackage: random-1.1@sha256:7b67624fd76ddf97c206de0801dc7e888097e9d572974be9b9ea6551d76965df,1777
+    pantry-tree:
+      size: 637
+      sha256: 14a1b01728c5584e87c9fa00746a66e28ffd89dd2c0eabd334c8463953496e1b
+  original:
+    hackage: random-1.1@sha256:7b67624fd76ddf97c206de0801dc7e888097e9d572974be9b9ea6551d76965df,1777
+- completed:
+    hackage: ref-tf-0.4.0.2@sha256:69de3550250e0cd69f45d080359cb314a9487c915024349c75b78732bbee9332,1134
+    pantry-tree:
+      size: 211
+      sha256: fc5a4a35b4c782a33f452c1dc66ffa8ddbf321e2db369bd8823c796f0d4d8c7f
+  original:
+    hackage: ref-tf-0.4.0.2@sha256:69de3550250e0cd69f45d080359cb314a9487c915024349c75b78732bbee9332,1134
+- completed:
+    hackage: witherable-0.3.5@sha256:6590a15735b50ac14dcc138d4265ff1585d5f3e9d3047d5ebc5abf4cd5f50084,1476
+    pantry-tree:
+      size: 271
+      sha256: b99f21dbac28da031eb7c787fbffbe5e77e0aee42b64b5dda082470e907d5ab5
+  original:
+    hackage: witherable-0.3.5@sha256:6590a15735b50ac14dcc138d4265ff1585d5f3e9d3047d5ebc5abf4cd5f50084,1476
+- completed:
+    hackage: zenc-0.1.2@sha256:2b32c40a3c11f07f466604526aacad2a535309da11b203334dbf586333c13534,1350
+    pantry-tree:
+      size: 302
+      sha256: e33b84b5528779e4d5c0887b88ebdb0290902ba4367ed786dfc366b29d485d81
+  original:
+    hackage: zenc-0.1.2@sha256:2b32c40a3c11f07f466604526aacad2a535309da11b203334dbf586333c13534,1350
+- completed:
+    hackage: ghcjs-dom-jsaddle-0.9.4.0@sha256:31ddfc5ebcbb4811b0c956fd5fcf106643012b46bb4e0bc2f15d09db1d116fbb,39525
+    pantry-tree:
+      size: 164
+      sha256: 3f665a5e70fab961bf236e5c672f497901632785d403024d7bab1785444a0816
+  original:
+    hackage: ghcjs-dom-jsaddle-0.9.4.0@sha256:31ddfc5ebcbb4811b0c956fd5fcf106643012b46bb4e0bc2f15d09db1d116fbb,39525
+- completed:
+    hackage: witherable-class-0@sha256:91f05518f9f4af5b02424f13ee7dcdab5d6618e01346aa2f388a72ff93e2e501,775
+    pantry-tree:
+      size: 277
+      sha256: e99696bf95da593a3892c7b9a28db09ffd139b4b1b313f32cec9d26979aa7ce2
+  original:
+    hackage: witherable-class-0
+- completed:
+    hackage: jsaddle-dom-0.9.4.1@sha256:c769ab7d568c6fa9d0ecc9fa1c83091bfd3277c48e7f109a056cd088f399505f,75700
+    pantry-tree:
+      size: 48295
+      sha256: 8216bbceb63aaed6184b28203347ddc697c6a492346d552d6f0937130bce8b1d
+  original:
+    hackage: jsaddle-dom-0.9.4.1@sha256:c769ab7d568c6fa9d0ecc9fa1c83091bfd3277c48e7f109a056cd088f399505f,75700
+- completed:
+    hackage: jsaddle-warp-0.9.8.0@sha256:d1c75ae6ab519f923bc8a13775abd779e584bd17c96a49a76f799860bd9174e9,2713
+    pantry-tree:
+      size: 475
+      sha256: 53d9041fc7be7cdf6eec6946af1ba51d48aaaec250edff5f9a9896b53fe5d04c
+  original:
+    hackage: jsaddle-warp-0.9.8.0@sha256:d1c75ae6ab519f923bc8a13775abd779e584bd17c96a49a76f799860bd9174e9,2713
 snapshots:
 - completed:
     size: 585392

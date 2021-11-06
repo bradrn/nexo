@@ -3,6 +3,32 @@ resolver: lts-18.1
 packages:
 - .
 - ./gui/interop
+- ./gui/web
 
 extra-deps:
 - regex-posix-clib-2.7@sha256:998fca06da3d719818f0691ef0b8b9b7375afeea228cb08bd9e2db53f96b0cd7,1232
+- git: https://github.com/reflex-frp/reflex-dom.git
+  commit: d0e0f3ebaf0ca42927cd36c31a553debd80495d7
+  subdirs:
+  - reflex-dom
+# - reflex-dom-0.6.1.0@sha256:69d7ecf9094eb7cfc999317f38763131764bd47ec90bfa2c76eb2dd28c5d2276,6532
+- reflex-0.8.1.1@sha256:bfa905e76b626991468f10690f301ae303c79de125da25436584f192687cf621,11940
+- reflex-dom-core-0.6.2.1@sha256:7e5024804b921f639ce6df33af5244c483b593e32cef1fde767ef9dfebf4973f,7834
+- constraints-0.12@sha256:71c7999d7fa01d8941f08d37d4c107c6b1bcbd0306e234157557b9b096b7f1be,2217
+- ghcjs-dom-0.9.4.0@sha256:c2b3d25145e24b66a8a5078c0d750305b577aeff05957cf282d74f6e8d2424dd,32082
+- jsaddle-0.9.8.0@sha256:d7acf2247cc93c2d8d0959eccf627077c4175c81b762c8d107c7006dda662d05,4418
+- monoidal-containers-0.6.0.1@sha256:f56ea8fe91ff93da140e38b8dab4b94437b901818c13ba72fc7fc802290323ee,2583
+- patch-0.0.4.0@sha256:dc50de424d9ded983651f073b3862c190d927f8b155bececeb7b518cb5f99f5a,2486
+- random-1.1@sha256:7b67624fd76ddf97c206de0801dc7e888097e9d572974be9b9ea6551d76965df,1777
+- ref-tf-0.4.0.2@sha256:69de3550250e0cd69f45d080359cb314a9487c915024349c75b78732bbee9332,1134
+- witherable-0.3.5@sha256:6590a15735b50ac14dcc138d4265ff1585d5f3e9d3047d5ebc5abf4cd5f50084,1476
+- zenc-0.1.2@sha256:2b32c40a3c11f07f466604526aacad2a535309da11b203334dbf586333c13534,1350
+- ghcjs-dom-jsaddle-0.9.4.0@sha256:31ddfc5ebcbb4811b0c956fd5fcf106643012b46bb4e0bc2f15d09db1d116fbb,39525
+- witherable-class-0
+- jsaddle-dom-0.9.4.1@sha256:c769ab7d568c6fa9d0ecc9fa1c83091bfd3277c48e7f109a056cd088f399505f,75700
+- jsaddle-warp-0.9.8.0@sha256:d1c75ae6ab519f923bc8a13775abd779e584bd17c96a49a76f799860bd9174e9,2713
+
+flags:
+  reflex-dom:
+    use-warp: true
+    webkit2gtk: false
