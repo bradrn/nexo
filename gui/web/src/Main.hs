@@ -7,7 +7,6 @@
 {-# LANGUAGE TypeApplications    #-}
 module Main where
 
-import Control.Applicative (liftA2)
 import Control.Monad.Fix (MonadFix)
 import Data.String (IsString(fromString))
 import Data.Text (Text, pack, unpack)
@@ -69,20 +68,31 @@ sheet :: forall t m.
 sheet = do
     addEv <- button "Add"
     el "br" blank
-    idsDyn <- updated @_ @Int <$> count addEv
 
-    cellIdsDyn <- foldDyn (:) [] idsDyn
+    cellsCurIx <- count addEv
+
     rec
         let -- partial: assumes the identifier is valid
             getCellValue :: Int -> Dynamic t Text
             getCellValue ident = ffor sheetDyn $ \(Sheet s) ->
                 pack $ fromMaybe "" $ display . cellValue <$> Map.lookup ident s
 
-        cellsDyn <- simpleList cellIdsDyn $ \ident ->
-            (liftA2 (,) ident) <$> cell (getCellValue =<< ident)
-        let cellsEv = switchDyn $ leftmost . fmap updated <$> cellsDyn
+        cellsDyn <- listHoldWithKey Map.empty (mkDiff <$> updated cellsCurIx) $
+            \i _ -> cell (getCellValue i)
+        let cellsEv = switchDyn $ updateds <$> cellsDyn
         sheetDyn <- foldDyn (\v -> evalSheet . uncurry insert v) (Sheet Map.empty) cellsEv
     blank
+  where
+    assoc :: Functor f => (c, f a) -> f (c, a)
+    assoc (i, fa) = (i,) <$> fa
+
+    -- | Given a map of 'Dynamic's, return an 'Event' which fires
+    -- whenever one of the 'Dynamic' fires, labelling with the key
+    updateds :: Map.Map c (Dynamic t a) -> Event t (c, a)
+    updateds = leftmost . fmap (updated . assoc) . Map.toList
+
+    mkDiff :: Int -> Map.Map Int (Maybe ())
+    mkDiff = flip Map.singleton (Just ())
 
 style :: IsString s => s
 style = fromString $ TL.unpack $ renderCss $ ($ undefined) [lucius|
