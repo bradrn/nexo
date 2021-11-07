@@ -25,6 +25,8 @@ executable web
   build-depends:       base >=4.12 && <4.15
 		     , nexo
                      , containers >= 0.6 && < 0.7
+                     , data-fix >= 0.3 && < 0.4
+                     , recursion-schemes >= 5.1 && < 5.3
 		     , reflex-dom >= 0.6 && < 0.7
                      , text >= 1.2 && < 1.3
                      , shakespeare >= 2.0 && < 2.1

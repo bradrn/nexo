@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE QuasiQuotes         #-}
 {-# LANGUAGE RecordWildCards     #-}
@@ -7,7 +9,13 @@
 {-# LANGUAGE TypeApplications    #-}
 module Main where
 
+import Control.Applicative (liftA2)
 import Control.Monad.Fix (MonadFix)
+#if MIN_VERSION_recursion_schemes(5,2,0)
+import Data.Fix (Fix(..))
+#else
+import Data.Functor.Foldable (Fix(..))
+#endif
 import Data.String (IsString(fromString))
 import Data.Text (Text, pack, unpack)
 import Text.Lucius (renderCss, lucius)
@@ -21,6 +29,70 @@ import Nexo.Sheet
 
 import Reflex.Dom hiding (display)
 import Data.Maybe (fromMaybe)
+
+label :: DomBuilder t m => Text -> m ()
+label = el "label" . text
+
+br :: DomBuilder t m => m ()
+br = el "br" blank
+
+assoc :: Functor f => (c, f a) -> f (c, a)
+assoc (i, fa) = (i,) <$> fa
+
+inputElementList ::
+    ( DomBuilder t m
+    , MonadFix m
+    , MonadHold t m
+    , Reflex t
+    ) => m (Dynamic t [Text])
+inputElementList = mdo
+    elems <- listHoldWithKey (0 =: ()) (updated elemsDiff) $ \_ _ -> do
+        iElem <- inputElement def <* br
+        let elemValue = _inputElement_value iElem
+        elemEdited <- holdDyn False =<< headE (True <$ updated elemValue)
+        pure (elemValue, elemEdited)
+
+    let listValuesNested = Map.elems <$> elems
+        listValues = fmap (mapMaybe removeUnedited) . traverse (uncurry $ liftA2 (,)) =<< listValuesNested
+
+        listEditedNested = Map.toList . fmap snd <$> elems
+    listUneditedIx <- holdUniqDyn $ listEditedNested >>= fmap findUneditedIx . traverse assoc
+    let elemsDiff = mkDiff <$> listUneditedIx
+
+    return listValues
+  where
+    removeUnedited :: (a, Bool) -> Maybe a
+    removeUnedited (_, False) = Nothing
+    removeUnedited (a, True ) = Just a
+
+    findUneditedIx :: Num a => [(a, Bool)] -> a
+    findUneditedIx ((i,False):_) = i
+    findUneditedIx [(i,True)] = i+1
+    findUneditedIx ((_,True):xs) = findUneditedIx xs
+    findUneditedIx [] = error "findUneditedIx: empty list"
+
+    mkDiff :: Int -> Map.Map Int (Maybe ())
+    mkDiff = flip Map.singleton (Just ())
+
+inputList ::
+    ( DomBuilder t m
+    , MonadFix m
+    , MonadHold t m
+    , PostBuild t m
+    )
+    => m (Dynamic t Cell)
+inputList = elClass "form" "cell" $ do
+    label "Name"
+    iName <- inputElement def
+    br
+    listDyn <- inputElementList
+
+    let nameDyn = _inputElement_value iName
+        exprParsedEv = Fix . XList <$> mapMaybe (traverse (parseMaybe pExpr . unpack)) (updated listDyn)
+
+    exprDyn <- holdDyn zeroExpr exprParsedEv
+
+    return $ Cell <$> (unpack <$> nameDyn) <*> constDyn Nothing <*> exprDyn <*> pure Invalidated
 
 cell ::
     ( DomBuilder t m
@@ -54,9 +126,8 @@ cell valueDyn = elClass "form" "cell" $ do
     exprDyn <- holdDyn zeroExpr exprParsedEv
 
     return $ Cell <$> (unpack <$> nameDyn) <*> typeDyn <*> exprDyn <*> pure Invalidated
-  where
-    label = el "label" . text
-    br = el "br" blank
+
+data WidgetType = CellWidget | InputList
 
 sheet :: forall t m.
     ( DomBuilder t m
@@ -67,9 +138,19 @@ sheet :: forall t m.
     ) => m ()
 sheet = do
     addEv <- button "Add"
+    (cellTypeSelect, _) <- selectElement def {
+            _selectElementConfig_initialValue = "cell"
+        } $ do
+        elAttr "option" ("value" =: "cell") $ text "Cell"
+        elAttr "option" ("value" =: "inputList") $ text "Input list"
+    let cellTypeSelectValue = current $ _selectElement_value cellTypeSelect
     el "br" blank
 
-    cellsCurIx <- count addEv
+    cellsCurIx <- updated <$> count addEv
+    let cellsDiffEv = ffor (attach cellTypeSelectValue cellsCurIx) $ \case
+            ("cell"     , i) -> Map.singleton i $ Just CellWidget
+            ("inputList", i) -> Map.singleton i $ Just InputList
+            _ -> error "sheet: unknown widget type"
 
     rec
         let -- partial: assumes the identifier is valid
@@ -77,28 +158,24 @@ sheet = do
             getCellValue ident = ffor sheetDyn $ \(Sheet s) ->
                 pack $ fromMaybe "" $ display . cellValue <$> Map.lookup ident s
 
-        cellsDyn <- listHoldWithKey Map.empty (mkDiff <$> updated cellsCurIx) $
-            \i _ -> cell (getCellValue i)
+        cellsDyn <- listHoldWithKey Map.empty cellsDiffEv $ \i -> \case
+            CellWidget -> cell (getCellValue i)
+            InputList  -> inputList
         let cellsEv = switchDyn $ updateds <$> cellsDyn
         sheetDyn <- foldDyn (\v -> evalSheet . uncurry insert v) (Sheet Map.empty) cellsEv
     blank
   where
-    assoc :: Functor f => (c, f a) -> f (c, a)
-    assoc (i, fa) = (i,) <$> fa
-
     -- | Given a map of 'Dynamic's, return an 'Event' which fires
     -- whenever one of the 'Dynamic' fires, labelling with the key
     updateds :: Map.Map c (Dynamic t a) -> Event t (c, a)
     updateds = leftmost . fmap (updated . assoc) . Map.toList
-
-    mkDiff :: Int -> Map.Map Int (Maybe ())
-    mkDiff = flip Map.singleton (Just ())
 
 style :: IsString s => s
 style = fromString $ TL.unpack $ renderCss $ ($ undefined) [lucius|
 .cell {
     display: inline-block;
     border: 1px solid;
+    vertical-align: top;
 }
 |]
 
