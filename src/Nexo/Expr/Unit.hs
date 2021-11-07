@@ -82,7 +82,7 @@ simplify = fmap (second $ Map.filter (/=0)) . cata \case
   where
     mul (f, u) (g, v) = (f*g, Map.unionWith (+) u v)
     div' (f, u) (g, v) = (f/g, Map.unionWith (+) u $ negate <$> v)
-    exp' x (f, u) = (f^x, (*x) <$> u)
+    exp' x (f, u) = (f^^x, (*x) <$> u)
 
 expandName :: String -> Maybe (Double, Map.Map (Either String String) Int)
 expandName "s"   = Just (1, Map.singleton (Left "s") 1)
