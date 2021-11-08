@@ -105,9 +105,18 @@ inferStep = \case
         tv <- TVar <$> fresh
         let cs = Unify tv . snd <$> xs
         s <- whenJustElse "#TYPE" $ solve cs
+
+        elemTsSupplied <- traverse (whenJustElse "#TYPE" . apply s . snd) xs
+        elemTDeclared <- whenJustElse "#TYPE" $ apply s tv
+
+        let convs = (flip getConversion elemTDeclared) <$> elemTsSupplied
+            elemsWithTs = zip (fst <$> xs) elemTsSupplied :: [(CoreExpr, Type)]
+        elemsConverted <- traverse2 "#TYPE" applyConversion convs elemsWithTs
+
         t <- whenJustElse "#TYPE" $ apply s tv
         applyToEnv s
-        pure (CApp (Right "List") $ (0,) . fst <$> xs, TList t)
+
+        pure (CApp (Right "List") elemsConverted, TList t)
     XRecord r' -> do
         r <- sequenceA r'
         pure (CRec $ fst <$> r, TRecord $ snd <$> r)
