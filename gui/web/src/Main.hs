@@ -16,6 +16,7 @@ import Data.Fix (Fix(..))
 #else
 import Data.Functor.Foldable (Fix(..))
 #endif
+import Data.Foldable (traverse_)
 import Data.String (IsString(fromString))
 import Data.Text (Text, pack, unpack)
 import Text.Lucius (renderCss, lucius)
@@ -25,10 +26,10 @@ import qualified Data.Text.Lazy as TL
 
 import Nexo.Expr.Parse
 import Nexo.Expr.Type
+import Nexo.Interpret (Value(..), render)
 import Nexo.Sheet
 
-import Reflex.Dom hiding (display)
-import Data.Maybe (fromMaybe)
+import Reflex.Dom hiding (display, Value)
 
 label :: DomBuilder t m => Text -> m ()
 label = el "label" . text
@@ -94,12 +95,23 @@ inputList = elClass "form" "cell" $ do
 
     return $ Cell <$> (unpack <$> nameDyn) <*> constDyn Nothing <*> exprDyn <*> pure Invalidated
 
+valueDisplay
+    :: (Adjustable t m, DomBuilder t m, PostBuild t m)
+    => Dynamic t (Maybe (ValueState a)) -> m ()
+valueDisplay = dyn_ . fmap (maybe blank errorOrGo)
+  where
+    errorOrGo (ValuePresent _ v) = go v
+    errorOrGo e = text $ pack $ display e
+
+    go (VList vs) = traverse_ ((br<*) . go) vs
+    go v = text $ pack $ render v
+
 cell ::
     ( DomBuilder t m
     , MonadHold t m
     , PostBuild t m
     )
-    => Dynamic t Text
+    => Dynamic t (Maybe (ValueState a))
     -> m (Dynamic t Cell)
 cell valueDyn = elClass "form" "cell" $ do
     label "Name"
@@ -112,7 +124,7 @@ cell valueDyn = elClass "form" "cell" $ do
     iExpr <- inputElement def
     br
     label "Value"
-    dynText valueDyn
+    valueDisplay valueDyn
 
     let nameEv = _inputElement_input iName
         typeEv = _inputElement_input iType
@@ -153,10 +165,9 @@ sheet = do
             _ -> error "sheet: unknown widget type"
 
     rec
-        let -- partial: assumes the identifier is valid
-            getCellValue :: Int -> Dynamic t Text
+        let getCellValue :: Int -> Dynamic t (Maybe (ValueState (ValueEnv Eval)))
             getCellValue ident = ffor sheetDyn $ \(Sheet s) ->
-                pack $ fromMaybe "" $ display . cellValue <$> Map.lookup ident s
+                cellValue <$> Map.lookup ident s
 
         cellsDyn <- listHoldWithKey Map.empty cellsDiffEv $ \i -> \case
             CellWidget -> cell (getCellValue i)
