@@ -119,6 +119,10 @@ evalExpr :: (MonadEnv (Value e) e f, Scoped e, MonadFail f) => CoreExpr -> f (Va
 evalExpr = para \case
     CLitF v -> pure $ fromLit v
     CVarF name -> lookupName name
+    CLetF v (_, vx') (_, x') -> scope $ do
+        vx <- vx'
+        extend (v, vx)
+        x'
     CLamF args (x, _) -> do
         env <- getEnv
         pure $ VClosure env args x

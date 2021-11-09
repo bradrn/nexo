@@ -13,6 +13,7 @@ import Nexo.Expr.Type
 data CoreExpr
     = CLit Literal
     | CVar String
+    | CLet String CoreExpr CoreExpr
     | CLam [String] CoreExpr
     | CRec (Map.Map String CoreExpr)
     | CApp (Either Op String) [(Int, CoreExpr)]

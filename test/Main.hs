@@ -71,6 +71,12 @@ functions = testGroup "Functions"
         testEvalExpr "1 : Bool" @?= Nothing
         testEvalExpr "[True,False] : List Bool" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
         testEvalExpr "[True,False] : Bool" @?= Nothing
+    , testCase "Let" $ do
+        testEvalExpr "Let(x = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "Let(x : Num = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "Let(x : Bool = 1, x)" @?= Nothing
+        testEvalExpr "Let(x : Num<m> = 1 km, x)" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1000)
+        testEvalExpr "Let(x : Num<m> = 1 km, x + 1 m)" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1001)
     , testCase "Lambdas" $ do
         fmap fst (testEvalExpr "a -> a") @?= Just (Forall ["a"] [] $ TFun [TVar "a"] $ TVar "a")
         fmap fst (testEvalExpr "(a,b) -> a") @?= Just (Forall ["a","b"] [] $ TFun [TVar "a",TVar "b"] $ TVar "a")

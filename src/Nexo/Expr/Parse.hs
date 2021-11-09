@@ -1,3 +1,5 @@
+{-# LANGUAGE BlockArguments #-}
+
 module Nexo.Expr.Parse
        ( parseMaybe
        , pPType
@@ -8,7 +10,7 @@ module Nexo.Expr.Parse
 import Control.Monad.Combinators.Expr
 import Data.Fix (Fix(..))
 import Data.Void ( Void )
-import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty )
+import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional )
 import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )
 
 import qualified Data.Map.Strict as Map
@@ -84,6 +86,17 @@ pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
     pString :: Parser String
     pString = char '"' *> (L.charLiteral `manyTill` char '"')
 
+pLet :: Parser Expr
+pLet = symbol "Let" *> paren do
+    v <- pIdentifier
+    vt <- optional $ symbol ":" *> pPType
+    _ <- symbol "="
+    vx <- pExpr
+    _ <- symbol ","
+    x <- pExpr
+    pure $ Fix $ XLet v vt vx x
+    
+
 pLam :: Parser Expr
 pLam = (Fix .) . XLam <$> args <* symbol "->" <*> pTerm
   where
@@ -116,6 +129,7 @@ operatorTable =
 pTerm :: Parser Expr
 pTerm = wrap $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
+    , pLet
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
     , try pLam
     , paren pExpr

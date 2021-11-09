@@ -156,6 +156,20 @@ inferStep = \case
     XVar v -> do
         t <- instantiate =<< lookupName v
         pure (CVar v, t)
+    XLet v t' vx' x' -> do
+        tDeclared <- maybe (TVar <$> fresh) instantiate t'
+        (vx, tSupplied) <- vx'
+        s <- whenJustElse "#TYPE" $ unify (Unify tSupplied tDeclared)
+
+        ((0, vxConverted), _) <- getConvertedExpr s (vx, tSupplied) tDeclared
+
+        t <- whenJustElse "#TYPE" $ apply s tDeclared
+        applyToEnv s
+
+        scope $ do
+            extend (v, Forall [] [] t)
+            (xRet, tRet) <- x'
+            pure (CLet v vxConverted xRet, tRet)
     XLam args x -> do
         tvs <- for args $ \arg -> (arg,) <$> fresh
         ((retc, rett), argts) <- scope $ do
