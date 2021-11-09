@@ -83,6 +83,44 @@ applyConversion (MultiplyBy f c) (x, t) = do
     applyConversion c x'
 applyConversion IdConversion (x, _) = pure (0, x)
 
+getConvertedExpr
+    :: ( MonadEnv PType e m
+       , MonadFail m
+       , MonadFresh m
+       , MonadSubst m
+       )
+    => Subst -> (CoreExpr, Type) -> Type -> m ((Int, CoreExpr), Conversion)
+getConvertedExpr s (suppliedExpr, suppliedT) declaredT = do
+    suppliedT' <- whenJustElse "#TYPE" $ apply s suppliedT
+    declaredT' <- whenJustElse "#TYPE" $ apply s declaredT
+
+    let conv = getConversion suppliedT' declaredT'
+    (,conv) <$> applyConversion conv (suppliedExpr, suppliedT')
+
+liftBy :: Int -> Type -> Type
+liftBy 0 t = t
+liftBy n t = TList $ liftBy (n-1) t
+
+getConvertedArgs
+    :: ( MonadEnv PType e m
+       , MonadFail m
+       , MonadFresh m
+       , MonadSubst m
+       )
+    => Subst -> ([(CoreExpr, Type)], Type) -> Type -> m ([(Int, CoreExpr)], Type)
+getConvertedArgs s (supplied, ret) declaredT = do
+    let declaredTs = getTFunArgs declaredT
+    (convertedArgs, convs) <- unzip <$>
+        traverse2 "#TYPE" (getConvertedExpr s) supplied declaredTs
+    ret' <- liftBy (getMaxLift convs) <$>
+        whenJustElse "#TYPE" (apply s ret)
+    pure (convertedArgs, ret')
+  where
+    getTFunArgs (TFun args _) = args
+    getTFunArgs _ = error "getConvertedArgs: bug in unifier"
+
+    getMaxLift = foldr (\case {UnliftBy n _ -> max n ; _ -> id}) 0
+
 -- This uses a variant of Hindley-Milner. Rather than composing all
 -- the substitutions then applying at the end, instead it applies each
 -- substitution as it is found. This allows it to compare function
@@ -106,12 +144,7 @@ inferStep = \case
         let cs = Unify tv . snd <$> xs
         s <- whenJustElse "#TYPE" $ solve cs
 
-        elemTsSupplied <- traverse (whenJustElse "#TYPE" . apply s . snd) xs
-        elemTDeclared <- whenJustElse "#TYPE" $ apply s tv
-
-        let convs = (flip getConversion elemTDeclared) <$> elemTsSupplied
-            elemsWithTs = zip (fst <$> xs) elemTsSupplied :: [(CoreExpr, Type)]
-        elemsConverted <- traverse2 "#TYPE" applyConversion convs elemsWithTs
+        elemsConverted <- traverse (fmap fst . flip (getConvertedExpr s) tv) xs
 
         t <- whenJustElse "#TYPE" $ apply s tv
         applyToEnv s
@@ -143,43 +176,24 @@ inferStep = \case
         pure (CApp (Right "GetField") [(0,r), (0,CLit (LText f))], t)
     XFun f args' -> do
         tfun <- instantiate =<< lookupName f
-        (args, argts) <- unzip <$> sequenceA args'
+        args <- sequenceA args'
         tv <- fresh
-        s <- whenJustElse "#TYPE" $ solve [Subtype tfun (TFun argts (TVar tv))]
+        s <- whenJustElse "#TYPE" $ solve [Subtype tfun (TFun (snd <$> args) (TVar tv))]
 
-        argtsSupplied <- traverse (whenJustElse "#TYPE" . apply s) argts
-        argtsDeclared <- whenJustElse "#TYPE" $ getTFunArgs <$> apply s tfun
-
-        let convs = zipWith getConversion argtsSupplied argtsDeclared :: [Conversion]
-            argsWithTs = zip args argtsSupplied :: [(CoreExpr, Type)]
-        argsConverted <- traverse2 "#TYPE" applyConversion convs argsWithTs
+        (argsConverted, ret) <- getConvertedArgs s (args, TVar tv) tfun
         
-        ret <- whenJustElse "#TYPE" $ apply s (TVar tv)
-        let ret' = liftBy (getMaxLift convs) ret
-        applyToEnv s
-
-        pure (CApp (Right f) argsConverted, ret')
+        pure (CApp (Right f) argsConverted, ret)
     XOp o arg1' arg2' -> do
         tfun <- instantiate =<< optype o
-        (arg1, t1) <- arg1'
-        (arg2, t2) <- arg2'
+        arg1@(_, t1) <- arg1'
+        arg2@(_, t2) <- arg2'
         tv <- fresh
         s <- whenJustElse "#TYPE" $ solve [Subtype tfun (TFun [t1,t2] (TVar tv))]
 
-        arg1Supplied <- whenJustElse "#TYPE" $ apply s t1
-        arg2Supplied <- whenJustElse "#TYPE" $ apply s t2
-        [arg1Declared, arg2Declared] <- whenJustElse "#TYPE" $ getTFunArgs <$> apply s tfun
-
-        let conv1 = getConversion arg1Supplied arg1Declared
-            conv2 = getConversion arg2Supplied arg2Declared
-        arg1Converted <- applyConversion conv1 (arg1, t1)
-        arg2Converted <- applyConversion conv2 (arg2, t2)
-
-        ret <- whenJustElse "#TYPE" $ apply s (TVar tv)
-        let ret' = liftBy (getMaxLift [conv1, conv2]) ret
+        (argsConverted, ret) <- getConvertedArgs s ([arg1,arg2], TVar tv) tfun
         applyToEnv s
 
-        pure (CApp (Left o) [arg1Converted,arg2Converted], ret')
+        pure (CApp (Left o) argsConverted, ret)
     XUnit x' u -> do
         (x, t) <- x'
         _ <- whenJustElse "#TYPE" $ solve [Subtype t (TNum Uno)]
@@ -192,20 +206,9 @@ inferStep = \case
         (x, t) <- x'
         s <- whenJustElse "#TYPE" $ unify (Unify t t')
 
-        tSupplied <- whenJustElse "#TYPE" $ apply s t
-        tDeclared <- whenJustElse "#TYPE" $ apply s t'
-        let conv = getConversion tSupplied tDeclared
-        (0, xConverted) <- applyConversion conv (x, t)
+        ((0, xConverted), _) <- getConvertedExpr s (x, t) t'
         applyToEnv s
         pure (xConverted, t')
-  where
-    getTFunArgs (TFun args _) = args
-    getTFunArgs _ = error "inferStep: bug in unifier"
-
-    getMaxLift = foldr (\case {UnliftBy n _ -> max n ; _ -> id}) 0
-
-    liftBy 0 t = t
-    liftBy n t = TList $ liftBy (n-1) t
 
 typecheck :: (MonadEnv PType e f, MonadFail f, MonadSubst f) => Expr -> f (CoreExpr, PType)
 typecheck = flip evalStateT (0::Int) . fmap (second generalise) . cata inferStep
