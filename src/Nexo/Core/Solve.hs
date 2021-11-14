@@ -69,6 +69,9 @@ unify (Subtype (TRecord r1) (TRecord r2)) = do
             r1 r2
     cs <- sequenceA $ Map.elems merged
     solve cs
+unify (Subtype (TTable t1) r2) = do
+    let r1 = TRecord $ TList <$> t1
+    unify (Subtype r1 r2)
 unify (Subtype t1 t2) = unify (Unify t1 t2)
 
 unify (Unify (TNum u) (TNum v)) = unifyU u v
@@ -86,6 +89,14 @@ unify (Unify (TRecord r1) (TRecord r2)) = do
             (Map.mapMissing $ \_ _ -> fail "#UNIFY")
             (Map.zipWithMatched $ \_ x y -> pure $ Subtype x y)
             r1 r2
+    cs <- sequenceA $ Map.elems merged
+    solve cs
+unify (Unify (TTable t1) (TTable t2)) = do
+    let merged = Map.merge
+            (Map.mapMissing $ \_ _ -> fail "#UNIFY")
+            (Map.mapMissing $ \_ _ -> fail "#UNIFY")
+            (Map.zipWithMatched $ \_ x y -> pure $ Subtype x y)
+            t1 t2
     cs <- sequenceA $ Map.elems merged
     solve cs
 unify _ = fail "#UNIFY"

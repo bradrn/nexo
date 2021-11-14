@@ -48,6 +48,17 @@ values = testGroup "Values"
             )
         testEvalExpr "(x: 1, y: True).x" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "(x: [1,2,3], y: True).x" @?= Just (Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1, 2, 3])
+    , testCase "Tables" $ do
+        testEvalExpr "Table(x: [1,2,3], y: (x+1))" @?= Just
+            ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno), ("y", TNum Uno)]
+            , VTable $ Map.fromList [("x", VNum <$> [1,2,3]), ("y", VNum <$> [2,3,4])]
+            )
+        testEvalExpr "Table(x: (y-1), y: [2,3,4])" @?= Just
+            ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno), ("y", TNum Uno)]
+            , VTable $ Map.fromList [("x", VNum <$> [1,2,3]), ("y", VNum <$> [2,3,4])]
+            )
+        testEvalExpr "Table(x: 1, y: (x+1))" @?= Nothing
+        testEvalExpr "Table(x: (y-1), y: [2,3,4]).x" @?= Just ( Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1,2,3])
     ]
 
 functions :: TestTree

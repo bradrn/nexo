@@ -14,6 +14,7 @@ import Data.Functor.Foldable (cata)
 import Data.Traversable (for)
 
 import qualified Data.Map.Strict as Map
+import qualified Data.Map.Merge.Strict as Map
 
 import Nexo.Core.Solve
 import Nexo.Core.Substitute
@@ -153,6 +154,31 @@ inferStep = \case
     XRecord r' -> do
         r <- sequenceA r'
         pure (CRec $ fst <$> r, TRecord $ snd <$> r)
+    XTable r' -> do
+        tvs <- traverse ((fmap.fmap) TVar $ const fresh) r'
+        let tsDeclared = TList <$> tvs
+        scope $ do
+            _ <- Map.traverseWithKey (curry extend) $ Forall [] [] <$> tsDeclared
+
+            r <- sequenceA r'
+            let rWithTvs :: Map.Map String ((CoreExpr, Type), Type)
+                rWithTvs = Map.merge
+                    (Map.mapMissing $ \_ _ -> error "inferStep: bug in XTable case")
+                    (Map.mapMissing $ \_ _ -> error "inferStep: bug in XTable case")
+                    (Map.zipWithMatched $ const (,))
+                    r tsDeclared
+
+            let (<&>) = flip fmap  -- for convenience
+                cs = Map.elems $ rWithTvs <&> \((_, tSupplied), tDeclared) -> Unify tSupplied (tDeclared)
+            s <- whenJustElse "#TYPE" $ solve cs
+
+            rConverted <- for rWithTvs $ \((x, tSupplied), tDeclared) ->
+                    snd . fst <$> getConvertedExpr s (x, tSupplied) tDeclared
+
+            ts <- traverse (whenJustElse "#TYPE" . apply s) tvs
+            applyToEnv s
+
+            pure (CTab rConverted, TTable ts)
     XVar v -> do
         t <- instantiate =<< lookupName v
         pure (CVar v, t)

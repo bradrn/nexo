@@ -71,6 +71,7 @@ pType = TNum <$> (symbol "Num" *> pUnitType)
     <|> TBool <$ symbol "Bool"
     <|> TText <$ symbol "Text"
     <|> TRecord <$> paren (pRecordSpec pType)
+    <|> TTable <$> paren (pRecordSpec pType)
     <|> TList <$> (symbol "List" *> pType)
 
 pPType :: Parser PType
@@ -129,6 +130,7 @@ operatorTable =
 pTerm :: Parser Expr
 pTerm = wrap $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
+    , try $ Fix . XTable <$> (symbol "Table" *> paren (pRecordSpec pTerm))
     , pLet
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
     , try pLam

@@ -22,6 +22,7 @@ data Type
     | TFun [Type] Type
     | TList Type
     | TRecord (Map.Map String Type)
+    | TTable (Map.Map String Type)
     deriving (Show, Eq, Ord)
 
 type TVar = String
@@ -66,6 +67,7 @@ data ExprF r
     = XLit Literal
     | XList [r]
     | XRecord (Map.Map String r)
+    | XTable (Map.Map String r)
     | XVar String
     | XLet String (Maybe PType) r r
     | XLam [String] r
