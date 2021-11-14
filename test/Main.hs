@@ -47,6 +47,7 @@ values = testGroup "Values"
             , VRecord (Map.fromList [("x", VNum 1  ), ("y", VBool True)])
             )
         testEvalExpr "(x: 1, y: True).x" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "(x: [1,2,3], y: True).x" @?= Just (Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1, 2, 3])
     ]
 
 functions :: TestTree

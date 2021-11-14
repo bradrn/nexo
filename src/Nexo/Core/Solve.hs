@@ -42,9 +42,9 @@ Definitions:
 
 Rules:
 
-   T ⫇ U          Uᵢ ⫇ Tᵢ   Tᵣ ⫇ Uᵣ         {k:v} ⊆ {j:u}
------------   -------------------------   -----------------
-List(T) ⫇ U   ({Tᵢ}) → Tᵣ ⫇ ({Uᵢ}) → Uᵣ   ({k:v}) ⫇ ({j:u})
+   T ⫇ U          Uᵢ ⫇ Tᵢ   Tᵣ ⫇ Uᵣ         {k:v} ∼ {j:u}      ({k:List(v)}) ⫇ record
+-----------   -------------------------   -----------------    --------------------
+List(T) ⫇ U   ({Tᵢ}) → Tᵣ ⫇ ({Uᵢ}) → Uᵣ   ({k:v}) ⫇ ({j:u})    Table({k:v}) ⫇ record
 
       T ⫇ U                  u concords v
 -----------------   -----   ---------------
@@ -65,7 +65,7 @@ unify (Subtype (TRecord r1) (TRecord r2)) = do
              Map.dropMissing                          -- OK if first record has fields not in second
             (Map.mapMissing $ \_ _ -> fail "#UNIFY")  -- but fail if expected fields are missing
             -- try to unify if they do
-            (Map.zipWithMatched $ \_ x y -> pure $ Subtype x y)
+            (Map.zipWithMatched $ \_ x y -> pure $ Unify x y)
             r1 r2
     cs <- sequenceA $ Map.elems merged
     solve cs
