@@ -1,40 +1,14 @@
 module Main where
 
-import Data.Traversable (for)
-
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import qualified Data.Map.Strict as Map
 
-import Nexo.Expr.Parse
 import Nexo.Expr.Type
 import Nexo.Expr.Unit
 import Nexo.Interpret
-import Nexo.Sheet
-
-testEvalExpr :: String -> Maybe (PType, Value (ValueEnv Eval))
-testEvalExpr xstr = do
-    x <- parseMaybe pExpr xstr
-    let c = Cell "test" Nothing x Invalidated
-        s = Sheet $ Map.singleton 0 c
-        Sheet s' = evalSheet s
-    val <- cellValue <$> Map.lookup 0 s'
-    case val of
-        ValuePresent t v -> Just (t, v)
-        _ -> Nothing
-
-testEvalExprs :: [(String, String)] -> Maybe (PType, Value (ValueEnv Eval))
-testEvalExprs xstrs = do
-    cs <- for xstrs $ \(n, xstr) -> do
-        x <- parseMaybe pExpr xstr
-        pure $ Cell n Nothing x Invalidated
-    let s = Sheet $ Map.fromList $ zip [0..] cs
-        Sheet s' = evalSheet s
-    val <- cellValue <$> Map.lookup 0 s'
-    case val of
-        ValuePresent t v -> Just (t, v)
-        _ -> Nothing
+import Nexo.Test
 
 main :: IO ()
 main = defaultMain tests
@@ -73,6 +47,18 @@ values = testGroup "Values"
             , VRecord (Map.fromList [("x", VNum 1  ), ("y", VBool True)])
             )
         testEvalExpr "(x: 1, y: True).x" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "(x: [1,2,3], y: True).x" @?= Just (Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1, 2, 3])
+    , testCase "Tables" $ do
+        testEvalExpr "Table(x: [1,2,3], y: (x+1))" @?= Just
+            ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno), ("y", TNum Uno)]
+            , VTable $ Map.fromList [("x", VNum <$> [1,2,3]), ("y", VNum <$> [2,3,4])]
+            )
+        testEvalExpr "Table(x: (y-1), y: [2,3,4])" @?= Just
+            ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno), ("y", TNum Uno)]
+            , VTable $ Map.fromList [("x", VNum <$> [1,2,3]), ("y", VNum <$> [2,3,4])]
+            )
+        testEvalExpr "Table(x: 1, y: (x+1))" @?= Nothing
+        testEvalExpr "Table(x: (y-1), y: [2,3,4]).x" @?= Just ( Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1,2,3])
     ]
 
 functions :: TestTree
@@ -97,6 +83,12 @@ functions = testGroup "Functions"
         testEvalExpr "1 : Bool" @?= Nothing
         testEvalExpr "[True,False] : List Bool" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
         testEvalExpr "[True,False] : Bool" @?= Nothing
+    , testCase "Let" $ do
+        testEvalExpr "Let(x = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "Let(x : Num = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "Let(x : Bool = 1, x)" @?= Nothing
+        testEvalExpr "Let(x : Num<m> = 1 km, x)" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1000)
+        testEvalExpr "Let(x : Num<m> = 1 km, x + 1 m)" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1001)
     , testCase "Lambdas" $ do
         fmap fst (testEvalExpr "a -> a") @?= Just (Forall ["a"] [] $ TFun [TVar "a"] $ TVar "a")
         fmap fst (testEvalExpr "(a,b) -> a") @?= Just (Forall ["a","b"] [] $ TFun [TVar "a",TVar "b"] $ TVar "a")
@@ -122,6 +114,7 @@ units = testGroup "Units"
         testEvalExpr "1 m + 2 s" @?= Nothing
         testEvalExpr "1 m * 2 s" @?= Just (Forall [] [] $ TNum (UMul (UName "m") (UName "s")), VNum 2)
         testEvalExpr "[1,2,3] m + [4,5,6] km" @?= Just (Forall [] [] (TList (TNum (UName "m"))),VList [VNum 4001,VNum 5002,VNum 6003])
+        testEvalExpr "[1 m, 2 km]" @?= Just (Forall [] [] (TList (TNum (UName "m"))),VList [VNum 1,VNum 2000])
     ]
 
 multis :: TestTree

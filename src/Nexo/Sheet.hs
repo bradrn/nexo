@@ -23,11 +23,13 @@ import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.State.Strict
     ( execState, gets, modify', put, state, runState, State, StateT (..), MonadState )
 import Control.Monad.Trans (lift)
+import Data.Bifunctor (second)
 #if MIN_VERSION_recursion_schemes(5,2,0)
 import Data.Fix (Fix(..))
 #else
 import Data.Functor.Foldable (Fix(..))
 #endif
+import Data.Fix (Fix(Fix))
 import qualified Data.Map.Strict as Map
 
 import Nexo.Core.Typecheck
@@ -56,14 +58,16 @@ toEither (ValuePresent t val) = Right (t, val)
 toEither (ValueError err) = Left err
 toEither Invalidated = Left "#INVALIDATED"
     
-newtype ValueEnv m = ValueEnv (SheetEnv (Value (ValueEnv m)) m)
-    deriving (Show, Scoped)
-newtype InValueEnvT m a = InValueEnvT { unwrapValueEnv :: InSheetEnvT (Value (ValueEnv m)) m a }
+newtype ValueEnv m = ValueEnv (SheetEnv (InValueEnvT m (Value (ValueEnv m))) m)
+    deriving (Scoped)
+instance Show (ValueEnv m) where
+    show _ = "\\VE[]"
+newtype InValueEnvT m a = InValueEnvT { unwrapValueEnv :: InSheetEnvT (InValueEnvT m (Value (ValueEnv m))) m a }
     deriving (Functor, Applicative, Monad, MonadFail)
-instance (Monad m, MonadFail m) => MonadEnv (Value (ValueEnv m)) (ValueEnv m) (InValueEnvT m) where
+instance (Monad m, MonadFail m) => MonadEnv (InValueEnvT m (Value (ValueEnv m))) (ValueEnv m) (InValueEnvT m) where
     lookupName = InValueEnvT . lookupName
     extend = InValueEnvT . extend
-    getEnv = InValueEnvT $ ValueEnv <$> getEnv
+    getEnv = InValueEnvT $ fmap ValueEnv $ getEnv
     withEnv (ValueEnv e) (InValueEnvT m) = InValueEnvT $ withEnv e m
 
     
@@ -121,8 +125,11 @@ evalSheet (Sheet s) =
             (v, t) <- case r of
                 Left e -> pure (ValueError e, Nothing)
                 Right ((coreExpr, resultType), _) -> do
-                    let venv :: SheetEnv (Value (ValueEnv Eval)) Eval
-                        venv = SheetEnv { lookupGlobal = fmap snd . cacheByName, locals = stdFnVals }
+                    let venv :: Applicative t => SheetEnv (t (Value (ValueEnv Eval))) Eval
+                        venv = SheetEnv
+                            { lookupGlobal = fmap (pure . snd) . cacheByName
+                            , locals = second pure <$> stdFnVals
+                            }
                     result <- lower $ fst <$> runInSheetEnvT (unwrapValueEnv $ evalExpr coreExpr) venv
                     pure $ (,Just resultType) $ fromEither resultType result
             modify' $ Map.insert ident (c { cellType = t, cellValue = v })

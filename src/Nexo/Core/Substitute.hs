@@ -47,6 +47,7 @@ instance Substitutable Type where
     apply s (TFun ts r) = TFun <$> traverse (apply s) ts <*> apply s r
     apply s (TList t) = TList <$> apply s t
     apply s (TRecord ts) = TRecord <$> traverse (apply s) ts
+    apply s (TTable ts) = TTable <$> traverse (apply s) ts
 
     frees (TNum u) = frees u
     frees TBool = (Set.empty, Set.empty)
@@ -57,6 +58,9 @@ instance Substitutable Type where
             (vs, us) -> (Set.unions vs, Set.unions us)
     frees (TList t) = frees t
     frees (TRecord ts) =
+        case unzip $ frees <$> Map.elems ts of
+            (vs, us) -> (Set.unions vs, Set.unions us)
+    frees (TTable ts) =
         case unzip $ frees <$> Map.elems ts of
             (vs, us) -> (Set.unions vs, Set.unions us)
 

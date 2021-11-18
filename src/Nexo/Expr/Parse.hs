@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP            #-}
+{-# LANGUAGE BlockArguments #-}
 
 module Nexo.Expr.Parse
        ( parseMaybe
@@ -14,7 +15,7 @@ import Data.Fix (Fix(..))
 import Data.Functor.Foldable (Fix(..))
 #endif
 import Data.Void ( Void )
-import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty )
+import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional )
 import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )
 
 import qualified Data.Map.Strict as Map
@@ -75,6 +76,7 @@ pType = TNum <$> (symbol "Num" *> pUnitType)
     <|> TBool <$ symbol "Bool"
     <|> TText <$ symbol "Text"
     <|> TRecord <$> paren (pRecordSpec pType)
+    <|> TTable <$> paren (pRecordSpec pType)
     <|> TList <$> (symbol "List" *> pType)
 
 pPType :: Parser PType
@@ -89,6 +91,17 @@ pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
 
     pString :: Parser String
     pString = char '"' *> (L.charLiteral `manyTill` char '"')
+
+pLet :: Parser Expr
+pLet = symbol "Let" *> paren do
+    v <- pIdentifier
+    vt <- optional $ symbol ":" *> pPType
+    _ <- symbol "="
+    vx <- pExpr
+    _ <- symbol ","
+    x <- pExpr
+    pure $ Fix $ XLet v vt vx x
+    
 
 pLam :: Parser Expr
 pLam = (Fix .) . XLam <$> args <* symbol "->" <*> pTerm
@@ -122,6 +135,8 @@ operatorTable =
 pTerm :: Parser Expr
 pTerm = wrap $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
+    , try $ Fix . XTable <$> (symbol "Table" *> paren (pRecordSpec pTerm))
+    , pLet
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
     , try pLam
     , paren pExpr

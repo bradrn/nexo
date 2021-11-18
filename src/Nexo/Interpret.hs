@@ -15,12 +15,14 @@ module Nexo.Interpret
        ) where
 
 import Prelude hiding (fail)
+import Control.Monad (join)
 import Control.Monad.Fail (MonadFail(..))
 import Data.Functor.Foldable (para)
 
+import qualified Data.Map.Lazy as Lazy
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes)
-import Data.Foldable (for_)
+import Data.Foldable (for_, traverse_)
 import Data.List (transpose, intercalate)
 
 import Nexo.Core.Type
@@ -33,6 +35,7 @@ data Value e
     | VText String
     | VList [Value e]
     | VRecord (Map.Map String (Value e))
+    | VTable (Map.Map String [Value e])
     | VClosure e [String] CoreExpr
     | VPrimClosure (PrimClosure e)
     deriving (Show)
@@ -47,6 +50,7 @@ instance Eq (Value e) where
     (VText t)   == (VText t')   = t  == t'
     (VList vs)  == (VList vs')  = vs == vs'
     (VRecord r) == (VRecord r') = r  == r'
+    (VTable t)  == (VTable t')  = t  == t'
     -- This is a naughty instance: functions are not even equal to
     -- themselves! But I can’t see any other good way to do this
     _ == _ = False
@@ -60,6 +64,10 @@ render (VRecord vs) =
     "(" ++ intercalate "," (renderField <$> Map.toList vs) ++ ")"
   where
     renderField (k,v) = k ++ ":" ++ render v
+render (VTable vs) =
+    "Table(" ++ intercalate "," (renderField <$> Map.toList vs) ++ ")"
+  where
+    renderField (k,v) = k ++ ":" ++ render (VList v)
 render VClosure{} = "λ…"
 render VPrimClosure{} = "λ…"
 
@@ -117,24 +125,35 @@ broadcast fn args
     replaceIn (Nothing:_) _ = error "broadcast: bug in unlifter"
     replaceIn (Just i:is) rs = i : replaceIn is rs
 
-evalExpr :: (MonadEnv (Value e) e f, Scoped e, MonadFail f) => CoreExpr -> f (Value e)
+evalExpr :: (MonadEnv (f (Value e)) e f, Scoped e, MonadFail f) => CoreExpr -> f (Value e)
 evalExpr = para \case
     CLitF v -> pure $ fromLit v
-    CVarF name -> lookupName name
+    CVarF name -> join $ lookupName name
+    CLetF v (_, vx) (_, x) -> scope $ do
+        extend (v, vx)
+        x
     CLamF args (x, _) -> do
         env <- getEnv
         pure $ VClosure env args x
     CRecF xs -> VRecord <$> sequenceA (snd <$> xs)
+    CTabF xs -> scope $ do
+        traverse_ extend $ Lazy.toList $ fmap snd xs
+        xs' <- sequenceA (snd <$> xs)
+        pure $ VTable $ fmap getList xs'
     CAppF (Left  op) es -> broadcast (pure . evalOp op) =<< traverse liftTuple es
     CAppF (Right fn) es -> do
-        v <- lookupName fn
+        v <- join $ lookupName fn
         broadcast (fromClosure v) =<< traverse liftTuple es
   where
+    getList :: Value a -> [Value a]
+    getList (VList vs) = vs
+    getList _ = error "evalExpr.getList: bug in typechecker"
+
     liftTuple :: Functor f => (a, (x, f b)) -> f (a, b)
     liftTuple (a, (_, b)) = (a,) <$> b
 
     fromClosure
-        :: ( MonadEnv (Value e) e m
+        :: ( MonadEnv (m (Value e)) e m
            , MonadFail m
            , Scoped e)
         => Value e -> ([Value e] -> m (Value e))
@@ -142,7 +161,7 @@ evalExpr = para \case
         env <- getEnv
         let innerEnv = env `addScope` env'
         withEnv innerEnv $ do
-            for_ (zip args vs) extend
+            for_ (zip args $ fmap pure vs) extend
             evalExpr x
     fromClosure (VPrimClosure (PrimClosure f)) vs = pure $ f vs
     fromClosure _ _ = error "fromClosure: bug in typechecker"

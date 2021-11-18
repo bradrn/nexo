@@ -44,9 +44,9 @@ Definitions:
 
 Rules:
 
-   T ⫇ U          Uᵢ ⫇ Tᵢ   Tᵣ ⫇ Uᵣ         {k:v} ⊆ {j:u}
------------   -------------------------   -----------------
-List(T) ⫇ U   ({Tᵢ}) → Tᵣ ⫇ ({Uᵢ}) → Uᵣ   ({k:v}) ⫇ ({j:u})
+   T ⫇ U          Uᵢ ⫇ Tᵢ   Tᵣ ⫇ Uᵣ         {k:v} ∼ {j:u}      ({k:List(v)}) ⫇ record
+-----------   -------------------------   -----------------    --------------------
+List(T) ⫇ U   ({Tᵢ}) → Tᵣ ⫇ ({Uᵢ}) → Uᵣ   ({k:v}) ⫇ ({j:u})    Table({k:v}) ⫇ record
 
       T ⫇ U                  u concords v
 -----------------   -----   ---------------
@@ -67,10 +67,13 @@ unify (Subtype (TRecord r1) (TRecord r2)) = do
              Map.dropMissing                          -- OK if first record has fields not in second
             (Map.mapMissing $ \_ _ -> fail "#UNIFY")  -- but fail if expected fields are missing
             -- try to unify if they do
-            (Map.zipWithMatched $ \_ x y -> pure $ Subtype x y)
+            (Map.zipWithMatched $ \_ x y -> pure $ Unify x y)
             r1 r2
     cs <- sequenceA $ Map.elems merged
     solve cs
+unify (Subtype (TTable t1) r2) = do
+    let r1 = TRecord $ TList <$> t1
+    unify (Subtype r1 r2)
 unify (Subtype t1 t2) = unify (Unify t1 t2)
 
 unify (Unify (TNum u) (TNum v)) = unifyU u v
@@ -88,6 +91,14 @@ unify (Unify (TRecord r1) (TRecord r2)) = do
             (Map.mapMissing $ \_ _ -> fail "#UNIFY")
             (Map.zipWithMatched $ \_ x y -> pure $ Subtype x y)
             r1 r2
+    cs <- sequenceA $ Map.elems merged
+    solve cs
+unify (Unify (TTable t1) (TTable t2)) = do
+    let merged = Map.merge
+            (Map.mapMissing $ \_ _ -> fail "#UNIFY")
+            (Map.mapMissing $ \_ _ -> fail "#UNIFY")
+            (Map.zipWithMatched $ \_ x y -> pure $ Subtype x y)
+            t1 t2
     cs <- sequenceA $ Map.elems merged
     solve cs
 unify _ = fail "#UNIFY"

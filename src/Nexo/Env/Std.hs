@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Nexo.Env.Std where
 
 import Nexo.Expr.Type
@@ -45,10 +47,10 @@ stdFnVals = fmap (second $ VPrimClosure . PrimClosure)
     , ("Root"     , \[VNum n1, VNum n2] -> VNum $ n1**(1/n2))
     , ("Power"    , \[VNum n1, VNum n2] -> VNum $ n1**n2)
     , ("List"     , VList)                   -- List function used by Haskell for making lists
-    , ("GetField" , \[VRecord r, VText f] ->
-              case Map.lookup f r of
-                  Just v -> v
-                  Nothing -> error "GetField(,): bug in typechecker"
+    , ("GetField" , \case
+          [VRecord r, VText f] | Just v <- Map.lookup f r -> v
+          [VTable  r, VText f] | Just v <- Map.lookup f r -> VList v
+          _ -> error "GetField(,): bug in typechecker"
       ) ]
 
 extractNum :: Value e -> Double
