@@ -19,6 +19,7 @@ import Data.Functor.Foldable (Fix(..))
 import Data.Foldable (traverse_)
 import Data.String (IsString(fromString))
 import Data.Text (Text, pack, unpack)
+import qualified Data.Text as T
 import Text.Lucius (renderCss, lucius)
 
 import qualified Data.Map.Strict as Map
@@ -95,6 +96,80 @@ inputList = elClass "form" "cell" $ do
 
     return $ Cell <$> (unpack <$> nameDyn) <*> constDyn Nothing <*> exprDyn <*> pure Invalidated
 
+table ::
+    forall m t e.
+    ( DomBuilder t m
+    , MonadFix m
+    , MonadHold t m
+    , PostBuild t m
+    )
+    => Dynamic t (Maybe (ValueState e))
+    -> m (Dynamic t Cell)
+table valueDyn = do
+    label "Table Name"
+    iName <- inputElement def
+    let nameDyn = _inputElement_value iName
+    br
+
+    divClass "column" $ do
+        label "Name" >> br
+        label "Formula" >> br
+        label "Value"
+
+    rec -- only so addEv can be defined later
+        cellsCurIx <- updated <$> count @_ @_ @Int addEv
+        columnsDynNested <- listHoldWithKey Map.empty ((=: Just ()) <$> cellsCurIx) $
+            \_ _ -> singleColumn >>= holdDyn ("", zeroExpr)
+        let columnsDyn = joinDynThroughMap columnsDynNested
+        addEv <- button "Add"
+    pure $ mkCell <$> nameDyn <*> columnsDyn
+  where
+    mkCell :: Text -> Map.Map a (Text, Expr) -> Cell
+    mkCell name columns =
+        let columns' = Map.mapKeys unpack $ Map.fromList $ Map.elems columns
+        in Cell
+        { cellName = unpack name
+        , cellType = Nothing -- TODO: handle types properly
+        , cellExpr = Fix $ XTable columns'
+        , cellValue = Invalidated
+        }
+
+    singleColumn ::
+        ( DomBuilder t m
+        , MonadFix m
+        , MonadHold t m
+        , PostBuild t m
+        )
+        => m (Event t (Text, Expr))
+    singleColumn = divClass "column" $ do
+        iName <- inputElement def
+        br
+        let nameDyn = _inputElement_value iName
+
+        -- label "Type"
+        -- iType <- inputElement def
+        -- br
+
+        iFormula <- inputElement def
+        let formulaDyn = _inputElement_value iFormula
+            noFormula = T.null <$> formulaDyn
+            formulaParsedDyn =
+                mapMaybe (parseMaybe pExpr . unpack) $ updated formulaDyn
+        contentWidgetNestedEv <- dyn $ ffor noFormula $ \case
+            True -> do
+                br
+                listDyn <- inputElementList
+                let exprParsedEv = Fix . XList <$> mapMaybe (traverse (parseMaybe pExpr . unpack)) (updated listDyn)
+                exprDyn <- holdDyn zeroExpr exprParsedEv
+                pure $ updated $ (,) <$> nameDyn <*> exprDyn
+            False -> do
+                valueDisplay $ ffor (zipDyn nameDyn valueDyn) $ \case
+                    (name, Just (ValuePresent pt (VTable tbl))) ->
+                        ValuePresent pt . VList <$> Map.lookup (unpack name) tbl
+                    _ -> Nothing
+                pure $ attach (current nameDyn) formulaParsedDyn
+        switchHold never contentWidgetNestedEv
+
 valueDisplay
     :: (Adjustable t m, DomBuilder t m, PostBuild t m)
     => Dynamic t (Maybe (ValueState a)) -> m ()
@@ -139,7 +214,7 @@ cell valueDyn = elClass "form" "cell" $ do
 
     return $ Cell <$> (unpack <$> nameDyn) <*> typeDyn <*> exprDyn <*> pure Invalidated
 
-data WidgetType = CellWidget | InputList
+data WidgetType = CellWidget | InputList | TableWidget
 
 sheet :: forall t m.
     ( DomBuilder t m
@@ -155,6 +230,7 @@ sheet = do
         } $ do
         elAttr "option" ("value" =: "cell") $ text "Cell"
         elAttr "option" ("value" =: "inputList") $ text "Input list"
+        elAttr "option" ("value" =: "table") $ text "Table"
     let cellTypeSelectValue = current $ _selectElement_value cellTypeSelect
     el "br" blank
 
@@ -162,6 +238,7 @@ sheet = do
     let cellsDiffEv = ffor (attach cellTypeSelectValue cellsCurIx) $ \case
             ("cell"     , i) -> Map.singleton i $ Just CellWidget
             ("inputList", i) -> Map.singleton i $ Just InputList
+            ("table"    , i) -> Map.singleton i $ Just TableWidget
             _ -> error "sheet: unknown widget type"
 
     rec
@@ -170,7 +247,8 @@ sheet = do
                 cellValue <$> Map.lookup ident s
 
         cellsDyn <- listHoldWithKey Map.empty cellsDiffEv $ \i -> \case
-            CellWidget -> cell (getCellValue i)
+            CellWidget  -> cell  (getCellValue i)
+            TableWidget -> table (getCellValue i)
             InputList  -> inputList
         let cellsEv = switchDyn $ updateds <$> cellsDyn
         sheetDyn <- foldDyn (\v -> evalSheet . uncurry insert v) (Sheet Map.empty) cellsEv
@@ -186,6 +264,10 @@ style = fromString $ TL.unpack $ renderCss $ ($ undefined) [lucius|
 .cell {
     display: inline-block;
     border: 1px solid;
+    vertical-align: top;
+}
+.column {
+    display: inline-block;
     vertical-align: top;
 }
 |]
