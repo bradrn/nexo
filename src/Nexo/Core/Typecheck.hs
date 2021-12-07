@@ -160,25 +160,30 @@ inferStep = \case
         scope $ do
             _ <- Map.traverseWithKey (curry extend) $ Forall [] [] <$> tsDeclared
 
-            r <- sequenceA r'
-            let rWithTvs :: Map.Map String ((CoreExpr, Type), Type)
-                rWithTvs = Map.merge
+            let r'WithTvs :: Map.Map String (m (CoreExpr, Type), Type)
+                r'WithTvs = Map.merge
                     (Map.mapMissing $ \_ _ -> error "inferStep: bug in XTable case")
                     (Map.mapMissing $ \_ _ -> error "inferStep: bug in XTable case")
                     (Map.zipWithMatched $ const (,))
-                    r tsDeclared
+                    r' tsDeclared
 
-            let (<&>) = flip fmap  -- for convenience
-                cs = Map.elems $ rWithTvs <&> \((_, tSupplied), tDeclared) -> Unify tSupplied (tDeclared)
-            s <- whenJustElse "#TYPE" $ solve cs
+                forKey = flip Map.traverseWithKey
 
-            rConverted <- for rWithTvs $ \((x, tSupplied), tDeclared) ->
-                    snd . fst <$> getConvertedExpr s (x, tSupplied) tDeclared
+            r <- forKey r'WithTvs $ \name (r'Elem, tDeclared) -> do
+                rElem@(_, tSupplied) <- r'Elem
+                tInferred <- (\(Forall [] [] t) -> t) <$> lookupName name
+                s <- whenJustElse "#TYPE" $ solve
+                    [ Unify tSupplied tDeclared  -- to get subst. for type variable
+                    , Unify tInferred tDeclared  -- to ensure it's consistent with previous inferences
+                    ]
+                xConverted <- snd . fst <$> getConvertedExpr s rElem tDeclared
+                applyToEnv s
+                t <- whenJustElse "#TYPE" $ flip fmap (apply s tDeclared) $ \case
+                    TList t' -> t'
+                    _ -> error "inferStep: bug in XTable case"
+                pure (xConverted, t)
 
-            ts <- traverse (whenJustElse "#TYPE" . apply s) tvs
-            applyToEnv s
-
-            pure (CTab rConverted, TTable ts)
+            pure (CTab (fst <$> r), TTable (snd <$> r))
     XVar v -> do
         t <- instantiate =<< lookupName v
         pure (CVar v, t)
