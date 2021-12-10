@@ -15,9 +15,9 @@ module Nexo.Interpret
        ) where
 
 import Control.Monad (join)
+import Data.Bifunctor (second)
 import Data.Functor.Foldable (para)
 
-import qualified Data.Map.Lazy as Lazy
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes)
 import Data.Foldable (for_, traverse_)
@@ -135,20 +135,23 @@ evalExpr = para \case
         pure $ VClosure env args x
     CRecF xs -> VRecord <$> sequenceA (snd <$> xs)
     CTabF xs -> scope $ do
-        traverse_ extend $ Lazy.toList $ fmap snd xs
-        xs' <- sequenceA (snd <$> xs)
-        pure $ VTable $ fmap getList xs'
-    CAppF (Left  op) es -> broadcast (pure . evalOp op) =<< traverse liftTuple es
+        traverse_ extend $ second snd <$> xs
+        xs' <- traverse (liftTuple . second snd) xs
+        pure $ VTable $ Map.fromList $ fmap (second getList) xs'
+    CAppF (Left  op) es -> broadcast (pure . evalOp op) =<< traverse liftTuple' es
     CAppF (Right fn) es -> do
         v <- join $ lookupName fn
-        broadcast (fromClosure v) =<< traverse liftTuple es
+        broadcast (fromClosure v) =<< traverse liftTuple' es
   where
     getList :: Value a -> [Value a]
     getList (VList vs) = vs
     getList _ = error "evalExpr.getList: bug in typechecker"
 
-    liftTuple :: Functor f => (a, (x, f b)) -> f (a, b)
-    liftTuple (a, (_, b)) = (a,) <$> b
+    liftTuple :: Functor f => (a, f b) -> f (a, b)
+    liftTuple (a, b) = (a,) <$> b
+
+    liftTuple' :: Functor f => (a, (x, f b)) -> f (a, b)
+    liftTuple' (a, (_, b)) = (a,) <$> b
 
     fromClosure
         :: ( MonadEnv (m (Value e)) e m

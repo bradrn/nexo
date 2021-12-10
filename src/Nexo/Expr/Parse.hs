@@ -39,7 +39,13 @@ pIdentifier :: Parser String
 pIdentifier = lexeme $ (:) <$> letterChar <*> many (alphaNumChar <|> oneOf "_")
 
 pRecordSpec :: Parser a -> Parser (Map.Map String a)
-pRecordSpec p = fmap Map.fromList $ ((,) <$> pIdentifier <* symbol ":" <*> p) `sepBy` symbol ","
+pRecordSpec = fmap fst . pOrderedRecordSpec
+
+pOrderedRecordSpec :: Parser a -> Parser (Map.Map String a, [String])
+pOrderedRecordSpec p = fmap fromListWithOrder $
+    ((,) <$> pIdentifier <* symbol ":" <*> p) `sepBy` symbol ","
+  where
+    fromListWithOrder l = (Map.fromList l, fst <$> l)
 
 pUnit :: Parser UnitDef
 pUnit = do
@@ -130,7 +136,7 @@ operatorTable =
 pTerm :: Parser Expr
 pTerm = wrap $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
-    , try $ Fix . XTable <$> (symbol "Table" *> paren (pRecordSpec pTerm))
+    , try $ Fix . uncurry XTable <$> (symbol "Table" *> paren (pOrderedRecordSpec pTerm))
     , pLet
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
     , try pLam

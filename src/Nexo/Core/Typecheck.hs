@@ -1,8 +1,9 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeApplications    #-}
 
 module Nexo.Core.Typecheck where
 
@@ -122,13 +123,15 @@ getConvertedArgs s (supplied, ret) declaredT = do
 
     getMaxLift = foldr (\case {UnliftBy n _ -> max n ; _ -> id}) 0
 
+
 -- This uses a variant of Hindley-Milner. Rather than composing all
 -- the substitutions then applying at the end, instead it applies each
 -- substitution as it is found. This allows it to compare function
 -- arguments to their expected types so that it can apply conversions
 -- correctly.
 inferStep
-    :: ( MonadEnv PType e m
+    :: forall m e.
+       ( MonadEnv PType e m
        , MonadFail m
        , MonadFresh m
        , MonadSubst m
@@ -154,9 +157,10 @@ inferStep = \case
     XRecord r' -> do
         r <- sequenceA r'
         pure (CRec $ fst <$> r, TRecord $ snd <$> r)
-    XTable r' -> do
+    XTable r' order -> do
         tvs <- traverse ((fmap.fmap) TVar $ const fresh) r'
         let tsDeclared = TList <$> tvs
+
         scope $ do
             _ <- Map.traverseWithKey (curry extend) $ Forall [] [] <$> tsDeclared
 
@@ -167,9 +171,10 @@ inferStep = \case
                     (Map.zipWithMatched $ const (,))
                     r' tsDeclared
 
-                forKey = flip Map.traverseWithKey
+                r'WithTvsOrdered :: [(String, (m (CoreExpr, Type), Type))]
+                r'WithTvsOrdered = (\k -> (k, r'WithTvs Map.! k)) <$> order
 
-            r <- forKey r'WithTvs $ \name (r'Elem, tDeclared) -> do
+            r <- flip traverse r'WithTvsOrdered $ \(name, (r'Elem, tDeclared)) -> do
                 rElem@(_, tSupplied) <- r'Elem
                 tInferred <- (\(Forall [] [] t) -> t) <$> lookupName name
                 s <- whenJustElse "#TYPE" $ solve
@@ -181,9 +186,9 @@ inferStep = \case
                 t <- whenJustElse "#TYPE" $ flip fmap (apply s tDeclared) $ \case
                     TList t' -> t'
                     _ -> error "inferStep: bug in XTable case"
-                pure (xConverted, t)
+                pure (name, (xConverted, t))
 
-            pure (CTab (fst <$> r), TTable (snd <$> r))
+            pure (CTab (second fst <$> r), TTable (snd <$> Map.fromList r))
     XVar v -> do
         t <- instantiate =<< lookupName v
         pure (CVar v, t)

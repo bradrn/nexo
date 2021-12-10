@@ -25,6 +25,7 @@ import Data.Fix (Fix(Fix))
 import qualified Data.Map.Strict as Map
 
 import Nexo.Core.Typecheck
+import Nexo.Expr.Reorder
 import Nexo.Expr.Type
 import Nexo.Interpret
 import Nexo.Env
@@ -111,7 +112,7 @@ evalSheet (Sheet s) =
         Nothing -> pure $ ValueError "#IREF"
         -- Typecheck, evaluate, cache and return new value if invalidated
         Just c@Cell{cellType = type_, cellExpr = expr, cellValue = Invalidated} -> do
-            let expr' = maybe expr (Fix . XTApp expr) type_
+            let expr' = reorder $ maybe expr (Fix . XTApp expr) type_
                 tenv = SheetEnv { lookupGlobal = fmap fst . cacheByName, locals = stdFnTs }
             r <- lower $ runInSheetEnvT (typecheck expr') tenv
             (v, t) <- case r of

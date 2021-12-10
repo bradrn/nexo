@@ -67,7 +67,7 @@ data ExprF r
     = XLit Literal
     | XList [r]
     | XRecord (Map.Map String r)
-    | XTable (Map.Map String r)
+    | XTable (Map.Map String r) [String]
     | XVar String
     | XLet String (Maybe PType) r r
     | XLam [String] r

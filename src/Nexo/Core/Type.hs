@@ -16,7 +16,7 @@ data CoreExpr
     | CLet String CoreExpr CoreExpr
     | CLam [String] CoreExpr
     | CRec (Map.Map String CoreExpr)
-    | CTab (Map.Map String CoreExpr)
+    | CTab [(String, CoreExpr)]
     | CApp (Either Op String) [(Int, CoreExpr)]
     deriving (Show)
 

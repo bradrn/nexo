@@ -23,6 +23,7 @@ library
                      , Nexo.Env
                      , Nexo.Env.Std
                      , Nexo.Expr.Parse
+                     , Nexo.Expr.Reorder
                      , Nexo.Expr.Type
                      , Nexo.Expr.Unit
                      , Nexo.Sheet
