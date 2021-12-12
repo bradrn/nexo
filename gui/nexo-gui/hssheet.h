@@ -20,6 +20,12 @@ public:
 
     void insertCell(int key, QString name, QString type, QString expr);
     void insertLiteralList(int key, QString name, QString type, QStringList lits);
+    void insertTable(
+            int key,
+            QString name,
+            QStringList headers,
+            QVector<QString *> formulae,
+            QVector<QStringList> columns);
     std::variant<std::monostate, QString, HsValue> queryCell(int key);
 
 signals:

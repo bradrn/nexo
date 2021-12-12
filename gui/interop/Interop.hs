@@ -1,5 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Interop where
 
@@ -7,6 +8,7 @@ import Control.Monad ((<=<))
 import Data.Fix (Fix(Fix))
 import Data.IORef
 import Data.List (genericLength)
+import Data.Traversable (for)
 import Foreign
 import Foreign.C hiding (newCString, peekCString) -- hide these so we don't accidentally use them
 import qualified GHC.Foreign as GHC
@@ -43,10 +45,43 @@ hsParseLiteralList clen cinput successPtr = do
             let xp = Fix . XList $ Fix . XLit <$> values
             in poke successPtr cTrue >> newStablePtr xp
 
+hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString) -> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr Expr)
+hsParseTable clen cheader cformula ccollen ccol successPtr = do
+    cheaders <- peekArray (fromIntegral clen) cheader
+    headers <- traverse (GHC.peekCString utf8) cheaders
+
+    cformulae <- peekArray (fromIntegral clen) cformula
+    formulae <- traverse (traverse (GHC.peekCString utf8) <=< ptrToMaybe) cformulae
+    let formulaeExprs = fmap (>>= parseMaybe pExpr) formulae
+
+    ccollens <- peekArray (fromIntegral clen) ccollen
+    ccols <- peekArray (fromIntegral clen) ccol
+    ccolss <- traverse (uncurry peekArray) $ zip (fromIntegral <$> ccollens) ccols
+    colss <- (traverse.traverse) (GHC.peekCString utf8) ccolss
+    let colExprss = (fmap.traverse) (parseMaybe pExpr) colss
+    case sequenceA (zipWith mkColumnExpr formulaeExprs colExprss) of
+        Nothing -> poke successPtr cFalse >> newStablePtr zeroExpr
+        Just columns ->
+            let xp = Fix $ XTable (Map.fromList $ zip headers columns) headers
+            in poke successPtr cTrue >> newStablePtr xp
+  where
+    ptrToMaybe :: Storable a => Ptr a -> IO (Maybe a)
+    ptrToMaybe p
+        | p == nullPtr = pure Nothing
+        | otherwise    = Just <$> peek p
+
+    mkColumnExpr :: Maybe Expr -> Maybe [Expr] -> Maybe Expr
+    mkColumnExpr (Just x) _         = Just x
+    mkColumnExpr _       (Just col) = Just $ Fix $ XList col
+    mkColumnExpr Nothing Nothing    = Nothing
+
 hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
 hsMaybeParseType cinput = do
     input <- GHC.peekCString utf8 cinput
     newStablePtr $ parseMaybe pPType input
+
+hsNothing :: IO (StablePtr (Maybe a))
+hsNothing = newStablePtr Nothing
 
 hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr Expr -> IO (StablePtr Cell)
 hsMkCell cname tptr xptr = do
@@ -89,6 +124,7 @@ hsExtractTopLevelType ptr = deRefStablePtr ptr >>= \case
         TList _ -> 5
         TRecord _ -> 6
         TFun _ _ -> 7
+        TTable _ -> 8
     _ -> return 0
 
 hsExtractValue :: StablePtr ValueState' -> IO (StablePtr Value')
@@ -107,13 +143,32 @@ hsValueToList ptr lptr = deRefStablePtr ptr >>= \case
         newArray vs'
     _ -> error "hsValueToList: tried to convert non-list to list"
 
+hsValueToTable
+    :: StablePtr Value'                   -- ^ input: table
+    -> Ptr CInt                           -- ^ output: number of columns
+    -> Ptr (Ptr CString)                  -- ^ output: list of column headings
+    -> Ptr (Ptr CInt)                     -- ^ output: list of column lengths
+    -> IO (Ptr (Ptr (StablePtr Value')))  -- ^ output: list of columns, each a list of values
+hsValueToTable ptr lptr headsptr clsptr = deRefStablePtr ptr >>= \case
+    VTable (unzip . Map.toList -> (heads,vs)) -> do
+        poke lptr $ genericLength vs
+        poke headsptr =<< newArray =<< traverse (GHC.newCString utf8) heads
+        (vs', cls) <- fmap unzip $ for vs $ \col -> do
+            col' <- newArray =<< traverse newStablePtr col
+            pure (col', genericLength col)
+        poke clsptr =<< newArray cls
+        newArray vs'
+    _ -> error "hsValueToTable: tried to convert non-table to table"
+
 hsNullStablePtr :: IO (StablePtr ())
 hsNullStablePtr = newStablePtr ()
 
 foreign export ccall hsNewSheet :: IO (StablePtr (IORef Sheet))
 foreign export ccall hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr Expr)
 foreign export ccall hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr Expr)
+foreign export ccall hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString)-> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr Expr)
 foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
+foreign export ccall hsNothing :: IO (StablePtr (Maybe a))
 foreign export ccall hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr Expr -> IO (StablePtr Cell)
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()
 foreign export ccall hsEvalSheet :: StablePtr (IORef Sheet) -> IO () 
@@ -123,4 +178,5 @@ foreign export ccall hsExtractTopLevelType :: StablePtr ValueState' -> IO CInt
 foreign export ccall hsExtractValue :: StablePtr ValueState' -> IO (StablePtr Value')
 foreign export ccall hsRenderValue :: StablePtr Value' -> IO CString
 foreign export ccall hsValueToList :: StablePtr Value' -> Ptr CInt -> IO (Ptr (StablePtr Value'))
+foreign export ccall hsValueToTable :: StablePtr Value' -> Ptr CInt -> Ptr (Ptr CString) -> Ptr (Ptr CInt) -> IO (Ptr (Ptr (StablePtr Value')))
 foreign export ccall hsNullStablePtr :: IO (StablePtr ())

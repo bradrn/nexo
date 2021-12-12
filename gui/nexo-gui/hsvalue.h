@@ -15,6 +15,8 @@ public:
         Var = 4,
         List = 5,
         Record = 6,
+        Fun = 7,
+        Table = 8,
         Unknown = 0
     };
 
@@ -30,6 +32,9 @@ public:
 
     // warning: only use on list!
     QVector<HsValue *> toList() const;
+
+    // warning: only use on table!
+    QHash<QString, QVector<HsValue *>> toTable() const;
 
 private:
     HsStablePtr value;

@@ -78,6 +78,77 @@ void HsSheet::insertLiteralList(int key, QString name, QString type, QStringList
     emit reevaluated();
 }
 
+void HsSheet::insertTable(
+        int key
+        , QString name
+        , QStringList headers
+        , QVector<QString *> formulae
+        , QVector<QStringList> columns)
+{
+    int length = headers.length();
+
+    char **cheaders = new char*[length];
+    char ***cformulae = new char**[length];
+    int *collens = new int[length];
+    char ***ccols = new char**[length];
+
+    for (int i=0; i<length; i++)
+    {
+        QString header = headers[i];
+        cheaders[i] = new char[header.length()+1];
+        strcpy(cheaders[i], header.toUtf8().data());
+
+        if (QString* formula = formulae[i])
+        {
+            cformulae[i] = new char*;
+            *(cformulae[i]) = new char[formula->length()+1];
+            strcpy(*(cformulae[i]), formula->toUtf8().data());
+        }
+        else
+            cformulae[i] = nullptr;
+
+        QStringList column = columns[i];
+        int collen = column.length();
+        collens[i] = collen;
+        ccols[i] = new char*[collen];
+        for (int j=0; j<collen; j++)
+        {
+            QString value = column[j];
+            ccols[i][j] = new char[value.length()+1];
+            strcpy(ccols[i][j], value.toUtf8().data());
+        }
+    }
+
+    bool *parseSuccess = new bool();
+    HsStablePtr pexpr = hsParseTable(length, cheaders, cformulae, collens, ccols, parseSuccess);
+    if (!*parseSuccess)
+        goto free;
+
+    {
+        HsStablePtr cell = hsMkCell(name.toUtf8().data(), hsNothing(), pexpr);
+        hsInsert(key, cell, hsSheet);
+        hsEvalSheet(hsSheet);
+        emit reevaluated();
+    }
+
+free:
+    hs_free_stable_ptr(pexpr);
+    delete parseSuccess;
+    for (int i=0; i<length; i++)
+    {
+        delete cheaders[i];
+        if (char **cformula = cformulae[i])
+            delete *cformula;
+        for (int j=0; j<collens[i]; j++)
+            delete ccols[i][j];
+        delete[] ccols[i];
+    }
+    delete[] cheaders;
+    delete[] cformulae;
+    delete[] ccols;
+    delete[] collens;
+}
+
 std::variant<std::monostate, QString, HsValue> HsSheet::queryCell(int key)
 {
     std::variant<std::monostate, QString, HsValue> retval {};

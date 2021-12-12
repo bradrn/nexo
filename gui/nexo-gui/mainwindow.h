@@ -22,6 +22,7 @@ protected:
 private slots:
     void newValue();
     void newInputList();
+    void newTable();
 
 private:
     QMdiArea *mdiArea;
@@ -30,6 +31,7 @@ private:
 
     QAction *newValueAct;
     QAction *newInputListAct;
+    QAction *newTableAct;
 
     HsSheet *sheet;
 };

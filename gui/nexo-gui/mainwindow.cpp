@@ -1,6 +1,7 @@
 #include "hssheet.h"
 #include "inputlist.h"
 #include "mainwindow.h"
+#include "table.h"
 #include "value.h"
 
 #include <QAction>
@@ -20,9 +21,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     newValueAct = new QAction(tr("&Value"));
     newInputListAct = new QAction(tr("&Input List"));
+    newTableAct = new QAction(tr("&Table"));
 
     connect(newValueAct, &QAction::triggered, this, &MainWindow::newValue);
     connect(newInputListAct, &QAction::triggered, this, &MainWindow::newInputList);
+    connect(newTableAct, &QAction::triggered, this, &MainWindow::newTable);
 }
 
 MainWindow::~MainWindow()
@@ -36,6 +39,7 @@ void MainWindow::contextMenuEvent(QContextMenuEvent *event)
     QMenu *newMenu = menu.addMenu("New");
     newMenu->addAction(newValueAct);
     newMenu->addAction(newInputListAct);
+    newMenu->addAction(newTableAct);
 
     menu.exec(event->globalPos());
 }
@@ -52,5 +56,12 @@ void MainWindow::newInputList()
     InputList *il = new InputList(latestKey++, sheet);
     mdiArea->addSubWindow(il);
     il->show();
+}
+
+void MainWindow::newTable()
+{
+   Table *t = new Table(latestKey++, sheet);
+   mdiArea->addSubWindow(t);
+   t->show();
 }
 
