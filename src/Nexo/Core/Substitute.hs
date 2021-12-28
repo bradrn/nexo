@@ -1,8 +1,10 @@
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module Nexo.Core.Substitute where
 
 import Control.Monad (replicateM)
+import Control.Monad.Except (MonadError(..))
 import Control.Monad.State.Strict (StateT, MonadState (get, put))
 import Data.Traversable (for)
 
@@ -95,11 +97,11 @@ occurs a t =
     let (vs, us) = frees t
     in a `Set.member` Set.union vs us
 
-bind :: MonadFail m => TVar -> Either Type UnitDef -> m Subst
+bind :: MonadError String m => TVar -> Either Type UnitDef -> m Subst
 bind v (Left (TVar v'))  | v == v' = pure nullSubst
-                         | occurs v (TVar v') = fail "#INFT"
+                         | occurs v (TVar v') = throwError "#INFT"
 bind v (Right (UVar v')) | v == v' = pure nullSubst
-                         | occurs v (UVar v') = fail "#INFT"
+                         | occurs v (UVar v') = throwError "#INFT"
 bind v t = pure $ Map.singleton v t
 
 class Monad m => MonadFresh m where
@@ -113,14 +115,14 @@ instance Monad m => MonadFresh (StateT Int m) where
       where
         letters = [1..] >>= flip replicateM ['a'..'z']
 
-instantiate :: (MonadFail m, MonadFresh m) => PType -> m Type
+instantiate :: (MonadError String m, MonadFresh m) => PType -> m Type
 instantiate (Forall as us t) = do
     as' <- for as $ const fresh
     us' <- for us $ const fresh
     let s = Map.fromList $
                 zip as (Left  . TVar <$> as') ++
                 zip us (Right . UVar <$> us')
-    maybe (fail "#TYPE") pure $ apply s t
+    maybe (throwError "#TYPE") pure $ apply s t
 
 generalise :: Type -> PType
 generalise t =

@@ -8,6 +8,7 @@
 module Nexo.Core.Typecheck where
 
 import Control.Monad ((<=<))
+import Control.Monad.Except (MonadError)
 import Control.Monad.State.Strict (evalStateT)
 import Data.Bifunctor (second)
 import Data.Foldable (for_)
@@ -62,9 +63,10 @@ getConversion t1 t2
     | otherwise = error "getConversion: bug in unifier"
 
 applyConversion
-    :: ( MonadEnv PType e m
-       , MonadFail m
+    :: ( MonadEnv PType m
+       , MonadError String m
        , MonadFresh m
+       , MonadScoped e m
        , MonadSubst m
        )
     => Conversion -> (CoreExpr, Type) -> m (Int, CoreExpr)
@@ -86,9 +88,10 @@ applyConversion (MultiplyBy f c) (x, t) = do
 applyConversion IdConversion (x, _) = pure (0, x)
 
 getConvertedExpr
-    :: ( MonadEnv PType e m
-       , MonadFail m
+    :: ( MonadEnv PType m
+       , MonadError String m
        , MonadFresh m
+       , MonadScoped e m
        , MonadSubst m
        )
     => Subst -> (CoreExpr, Type) -> Type -> m ((Int, CoreExpr), Conversion)
@@ -104,9 +107,10 @@ liftBy 0 t = t
 liftBy n t = TList $ liftBy (n-1) t
 
 getConvertedArgs
-    :: ( MonadEnv PType e m
-       , MonadFail m
+    :: ( MonadEnv PType m
+       , MonadError String m
        , MonadFresh m
+       , MonadScoped e m
        , MonadSubst m
        )
     => Subst -> ([(CoreExpr, Type)], Type) -> Type -> m ([(Int, CoreExpr)], Type)
@@ -131,9 +135,10 @@ getConvertedArgs s (supplied, ret) declaredT = do
 -- correctly.
 inferStep
     :: forall m e.
-       ( MonadEnv PType e m
-       , MonadFail m
+       ( MonadEnv PType m
+       , MonadError String m
        , MonadFresh m
+       , MonadScoped e m
        , MonadSubst m
        )
     => ExprF (m (CoreExpr, Type))
@@ -146,7 +151,7 @@ inferStep = \case
         xs <- sequenceA xs'
         tv <- TVar <$> fresh
         let cs = Unify tv . snd <$> xs
-        s <- whenJustElse "#TYPE" $ solve cs
+        s <- solve cs
 
         elemsConverted <- traverse (fmap fst . flip (getConvertedExpr s) tv) xs
 
@@ -177,7 +182,7 @@ inferStep = \case
             r <- flip traverse r'WithTvsOrdered $ \(name, (r'Elem, tDeclared)) -> do
                 rElem@(_, tSupplied) <- r'Elem
                 tInferred <- (\(Forall [] [] t) -> t) <$> lookupName name
-                s <- whenJustElse "#TYPE" $ solve
+                s <- solve
                     [ Unify tSupplied tDeclared  -- to get subst. for type variable
                     , Unify tInferred tDeclared  -- to ensure it's consistent with previous inferences
                     ]
@@ -195,9 +200,9 @@ inferStep = \case
     XLet v t' vx' x' -> do
         tDeclared <- maybe (TVar <$> fresh) instantiate t'
         (vx, tSupplied) <- vx'
-        s <- whenJustElse "#TYPE" $ unify (Unify tSupplied tDeclared)
+        s <- unify (Unify tSupplied tDeclared)
 
-        ((0, vxConverted), _) <- getConvertedExpr s (vx, tSupplied) tDeclared
+        ((_0, vxConverted), _) <- getConvertedExpr s (vx, tSupplied) tDeclared
 
         t <- whenJustElse "#TYPE" $ apply s tDeclared
         applyToEnv s
@@ -219,7 +224,7 @@ inferStep = \case
         tv <- fresh
         -- unify with minimal record which could work
         let c = Subtype rt (TRecord $ Map.singleton f $ TVar tv)
-        s <- whenJustElse "#TYPE" $ solve [c]
+        s <- solve [c]
         -- then back-substitute
         t <- whenJustElse "#TYPE" $ apply s (TVar tv)
         applyToEnv s
@@ -228,7 +233,7 @@ inferStep = \case
         tfun <- instantiate =<< lookupName f
         args <- sequenceA args'
         tv <- fresh
-        s <- whenJustElse "#TYPE" $ solve [Subtype tfun (TFun (snd <$> args) (TVar tv))]
+        s <- solve [Subtype tfun (TFun (snd <$> args) (TVar tv))]
 
         (argsConverted, ret) <- getConvertedArgs s (args, TVar tv) tfun
         
@@ -238,7 +243,7 @@ inferStep = \case
         arg1@(_, t1) <- arg1'
         arg2@(_, t2) <- arg2'
         tv <- fresh
-        s <- whenJustElse "#TYPE" $ solve [Subtype tfun (TFun [t1,t2] (TVar tv))]
+        s <- solve [Subtype tfun (TFun [t1,t2] (TVar tv))]
 
         (argsConverted, ret) <- getConvertedArgs s ([arg1,arg2], TVar tv) tfun
         applyToEnv s
@@ -246,7 +251,7 @@ inferStep = \case
         pure (CApp (Left o) argsConverted, ret)
     XUnit x' u -> do
         (x, t) <- x'
-        _ <- whenJustElse "#TYPE" $ solve [Subtype t (TNum Uno)]
+        _ <- solve [Subtype t (TNum Uno)]
 
         case getConversion t (TNum Uno) of
             UnliftBy n _ -> pure (x, liftBy n $ TNum u)
@@ -254,16 +259,21 @@ inferStep = \case
     XTApp x' pty -> do
         t' <- instantiate pty
         (x, t) <- x'
-        s <- whenJustElse "#TYPE" $ unify (Unify t t')
+        s <- unify (Unify t t')
 
-        ((0, xConverted), _) <- getConvertedExpr s (x, t) t'
+        ((_0, xConverted), _) <- getConvertedExpr s (x, t) t'
         applyToEnv s
         pure (xConverted, t')
 
-typecheck :: (MonadEnv PType e f, MonadFail f, MonadSubst f) => Expr -> f (CoreExpr, PType)
+typecheck
+    :: ( MonadEnv PType f
+       , MonadError String f
+       , MonadScoped e f
+       , MonadSubst f
+       ) => Expr -> f (CoreExpr, PType)
 typecheck = flip evalStateT (0::Int) . fmap (second generalise) . cata inferStep
 
-optype :: MonadFail m => Op -> m PType
+optype :: MonadError String m => Op -> m PType
 optype OEq    = pure $ Forall [] ["a"]      $ TFun [TVar "a", TVar "a"] (TVar "a")
 optype ONeq   = pure $ Forall [] ["a"]      $ TFun [TVar "a", TVar "a"] (TVar "a")
 optype OPlus  = pure $ Forall [] ["u"]      $ TFun [TNum $ UVar "u", TNum $ UVar "u"] (TNum $ UVar "u")

@@ -3,8 +3,10 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 module Nexo.Interpret
@@ -15,6 +17,7 @@ module Nexo.Interpret
        ) where
 
 import Control.Monad (join)
+import Control.Monad.Except (MonadError(throwError))
 import Data.Bifunctor (second)
 import Data.Functor.Foldable (para)
 
@@ -87,12 +90,12 @@ evalOp OAnd   [VBool p, VBool q] = VBool $ p && q
 evalOp OOr    [VBool p, VBool q] = VBool $ p || q
 evalOp _ _ = error "evalApp: bug in typechecker"
 
-broadcast :: MonadFail f => ([Value e] -> f (Value e)) -> [(Int, Value e)] -> f (Value e)
+broadcast :: MonadError String f => ([Value e] -> f (Value e)) -> [(Int, Value e)] -> f (Value e)
 broadcast fn args
     | all ((0==) . fst) args = fn $ snd <$> args
     | otherwise = fmap VList $ traverse (broadcast fn) =<< unliftSplit args
   where
-    unliftSplit :: MonadFail f => [(Int, Value e)] -> f [[(Int, Value e)]]
+    unliftSplit :: MonadError String f => [(Int, Value e)] -> f [[(Int, Value e)]]
     unliftSplit args' =
         let levels = fst <$> args'
             maxlevel = if null levels then 0 else maximum levels
@@ -104,7 +107,7 @@ broadcast fn args
                 levels args'
         in fmap (replaceIn placeholders) <$> transposeVLists fills
 
-    transposeVLists :: MonadFail f => [(Int, Value e)] -> f [[(Int, Value e)]]
+    transposeVLists :: MonadError String f => [(Int, Value e)] -> f [[(Int, Value e)]]
     transposeVLists = transpose' . fmap extractVList
       where
         extractVList (i, VList l) = (i-1,) <$> l
@@ -115,7 +118,7 @@ broadcast fn args
             let lens = length <$> ls in
                 if all (==head lens) lens
                 then pure $ transpose ls
-                else fail "#LENGTH"
+                else throwError "#LENGTH"
 
     replaceIn :: [Maybe a] -> [a] -> [a]
     replaceIn [] _ = []
@@ -123,7 +126,7 @@ broadcast fn args
     replaceIn (Nothing:_) _ = error "broadcast: bug in unlifter"
     replaceIn (Just i:is) rs = i : replaceIn is rs
 
-evalExpr :: (MonadEnv (f (Value e)) e f, Scoped e, MonadFail f) => CoreExpr -> f (Value e)
+evalExpr :: (MonadEnv (f (Value e)) f, MonadScoped e f, Scoped e, MonadError String f) => CoreExpr -> f (Value e)
 evalExpr = para \case
     CLitF v -> pure $ fromLit v
     CVarF name -> join $ lookupName name
@@ -154,15 +157,17 @@ evalExpr = para \case
     liftTuple' (a, (_, b)) = (a,) <$> b
 
     fromClosure
-        :: ( MonadEnv (m (Value e)) e m
-           , MonadFail m
+        :: forall m e.
+           ( MonadEnv (m (Value e)) m
+           , MonadError String m
+           , MonadScoped e m
            , Scoped e)
         => Value e -> ([Value e] -> m (Value e))
     fromClosure (VClosure env' args x) vs = do
         env <- getEnv
         let innerEnv = env `addScope` env'
         withEnv innerEnv $ do
-            for_ (zip args $ fmap pure vs) extend
+            for_ (zip args $ fmap (pure @m) vs) extend
             evalExpr x
     fromClosure (VPrimClosure (PrimClosure f)) vs = pure $ f vs
     fromClosure _ _ = error "fromClosure: bug in typechecker"

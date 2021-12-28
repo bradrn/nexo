@@ -8,7 +8,7 @@ import Nexo.Expr.Type
 import Nexo.Interpret
 import Nexo.Sheet
 
-testEvalExpr :: String -> Maybe (PType, Value (ValueEnv Eval))
+testEvalExpr :: String -> Maybe (PType, Value GlobalEnv)
 testEvalExpr xstr = do
     x <- parseMaybe pExpr xstr
     let c = Cell "test" Nothing x Invalidated
@@ -19,7 +19,7 @@ testEvalExpr xstr = do
         ValuePresent t v -> Just (t, v)
         _ -> Nothing
 
-testEvalExprs :: [(String, String)] -> Maybe (PType, Value (ValueEnv Eval))
+testEvalExprs :: [(String, String)] -> Maybe (PType, Value GlobalEnv)
 testEvalExprs xstrs = do
     cs <- for xstrs $ \(n, xstr) -> do
         x <- parseMaybe pExpr xstr
