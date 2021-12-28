@@ -39,6 +39,7 @@ data Value e
     | VTable (Map.Map String [Value e])
     | VClosure e [String] CoreExpr
     | VPrimClosure (PrimClosure e)
+    | VNull
     deriving (Show)
 
 newtype PrimClosure e = PrimClosure ([Value e] -> Value e)
@@ -52,6 +53,7 @@ instance Eq (Value e) where
     (VList vs)  == (VList vs')  = vs == vs'
     (VRecord r) == (VRecord r') = r  == r'
     (VTable t)  == (VTable t')  = t  == t'
+    VNull       == VNull        = True
     -- This is a naughty instance: functions are not even equal to
     -- themselves! But I can’t see any other good way to do this
     _ == _ = False
@@ -71,6 +73,7 @@ render (VTable vs) =
     renderField (k,v) = k ++ ":" ++ render (VList v)
 render VClosure{} = "λ…"
 render VPrimClosure{} = "λ…"
+render VNull = "—"
 
 fromLit :: Literal -> Value e
 fromLit (LNum n) = VNum n
@@ -78,6 +81,7 @@ fromLit (LBool b) = VBool b
 fromLit (LText t) = VText t
 
 evalOp :: Op -> [Value e] -> Value e
+evalOp _ l | any (\case VNull -> True; _ -> False) l = VNull
 evalOp OPlus  [VNum i1, VNum i2] = VNum $ i1 + i2
 evalOp OMinus [VNum i1, VNum i2] = VNum $ i1 - i2
 evalOp OTimes [VNum i1, VNum i2] = VNum $ i1 * i2
@@ -145,6 +149,7 @@ evalExpr = para \case
     CAppF (Right fn) es -> do
         v <- join $ lookupName fn
         broadcast (fromClosure v) =<< traverse liftTuple' es
+    CNullF -> pure VNull
   where
     getList :: Value a -> [Value a]
     getList (VList vs) = vs

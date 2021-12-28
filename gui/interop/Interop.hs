@@ -32,7 +32,7 @@ hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr Expr)
 hsParseExpr cinput successPtr = do
     input <- GHC.peekCString utf8 cinput
     case parseMaybe pExpr input of
-        Nothing -> poke successPtr cFalse >> newStablePtr zeroExpr
+        Nothing -> poke successPtr cFalse >> newStablePtr (Fix XNull)
         Just xp -> poke successPtr cTrue  >> newStablePtr xp
 
 hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr Expr)
@@ -40,7 +40,7 @@ hsParseLiteralList clen cinput successPtr = do
     cinputs <- peekArray (fromIntegral clen) cinput
     inputs <- traverse (GHC.peekCString utf8) cinputs
     case traverse (parseMaybe pLit) inputs of
-        Nothing -> poke successPtr cFalse >> newStablePtr zeroExpr
+        Nothing -> poke successPtr cFalse >> newStablePtr (Fix XNull)
         Just values ->
             let xp = Fix . XList $ Fix . XLit <$> values
             in poke successPtr cTrue >> newStablePtr xp
@@ -60,7 +60,7 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
     colss <- (traverse.traverse) (GHC.peekCString utf8) ccolss
     let colExprss = (fmap.traverse) (parseMaybe pExpr) colss
     case sequenceA (zipWith mkColumnExpr formulaeExprs colExprss) of
-        Nothing -> poke successPtr cFalse >> newStablePtr zeroExpr
+        Nothing -> poke successPtr cFalse >> newStablePtr (Fix XNull)
         Just columns ->
             let xp = Fix $ XTable (Map.fromList $ zip headers columns) headers
             in poke successPtr cTrue >> newStablePtr xp

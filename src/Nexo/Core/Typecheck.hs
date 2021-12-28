@@ -264,6 +264,7 @@ inferStep = \case
         ((_0, xConverted), _) <- getConvertedExpr s (x, t) t'
         applyToEnv s
         pure (xConverted, t')
+    XNull -> (CNull,) . TVar <$> fresh
 
 typecheck
     :: ( MonadEnv PType f

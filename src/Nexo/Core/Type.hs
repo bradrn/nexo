@@ -18,6 +18,7 @@ data CoreExpr
     | CRec (Map.Map String CoreExpr)
     | CTab [(String, CoreExpr)]
     | CApp (Either Op String) [(Int, CoreExpr)]
+    | CNull
     deriving (Show)
 
 makeBaseFunctor ''CoreExpr

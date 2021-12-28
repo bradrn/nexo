@@ -34,6 +34,9 @@ literals = testGroup "Literals"
     , testCase "Text" $ do
         testEvalExpr "\"\""            @?= Just (Forall [] [] TText, VText "")
         testEvalExpr "\"Hello world\"" @?= Just (Forall [] [] TText, VText "Hello world")
+    , testCase "Null" $ do
+        testEvalExpr "" @?= Just (Forall ["a"] [] $ TVar "a", VNull)
+        testEvalExpr "Null" @?= Just (Forall ["a"] [] $ TVar "a", VNull)
     ]
 
 values :: TestTree
@@ -73,6 +76,10 @@ values = testGroup "Values"
                   ]
             , VTable $ Map.fromList [("y",[VList [VNum 2]]), ("z",[VList [VNum 1]])]
             )
+        testEvalExpr "Table(x: [1, Null])" @?= Just
+            ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno)]
+            , VTable $ Map.fromList [("x", [VNum 1, VNull])]
+            )
     ]
 
 functions :: TestTree
@@ -92,6 +99,11 @@ functions = testGroup "Functions"
         testEvalExpr "If([True,False], [[1,2],[3,4]], [10,20])" @?= Just
             ( Forall [] [] $ TList $ TList $ TNum Uno
             , VList [VList $ VNum <$> [1,20], VList $ VNum <$> [3,20]])
+    , testCase "Null handling" $ do
+        testEvalExpr "10 + Null"          @?= Just (Forall [] [] $ TNum Uno, VNull)
+        testEvalExpr "Power(2, Null)"     @?= Just (Forall [] [] $ TNum Uno, VNull)
+        testEvalExpr "If(True, 1, Null)"  @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "If(False, 1, Null)" @?= Just (Forall [] [] $ TNum Uno, VNull)
     , testCase "Ascription" $ do
         testEvalExpr "1 : Num" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "1 : Bool" @?= Nothing

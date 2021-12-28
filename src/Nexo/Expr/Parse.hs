@@ -10,7 +10,7 @@ module Nexo.Expr.Parse
 import Control.Monad.Combinators.Expr
 import Data.Fix (Fix(..))
 import Data.Void ( Void )
-import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional )
+import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional, eof )
 import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )
 
 import qualified Data.Map.Strict as Map
@@ -98,9 +98,9 @@ pLet = symbol "Let" *> paren do
     v <- pIdentifier
     vt <- optional $ symbol ":" *> pPType
     _ <- symbol "="
-    vx <- pExpr
+    vx <- pExprInner
     _ <- symbol ","
-    x <- pExpr
+    x <- pExprInner
     pure $ Fix $ XLet v vt vx x
     
 
@@ -138,12 +138,13 @@ pTerm = wrap $ choice
     [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
     , try $ Fix . uncurry XTable <$> (symbol "Table" *> paren (pOrderedRecordSpec pTerm))
     , pLet
-    , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExpr `sepBy` symbol ",")
+    , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
     , try pLam
-    , paren pExpr
+    , paren pExprInner
     , Fix . XLit <$> pLit
+    , Fix XNull <$ symbol "Null"
     , Fix . XVar <$> pIdentifier
-    , Fix . XList <$> sqparen (pExpr `sepBy` symbol ",")
+    , Fix . XList <$> sqparen (pExprInner `sepBy` symbol ",")
     ]
   where
     wrap :: Parser Expr -> Parser Expr
@@ -154,5 +155,8 @@ pTerm = wrap $ choice
             <|> (Fix . XUnit r <$> pUnit)
             <|> pure r
 
+pExprInner :: Parser Expr
+pExprInner = makeExprParser pTerm operatorTable
+
 pExpr :: Parser Expr
-pExpr = makeExprParser pTerm operatorTable
+pExpr = (Fix XNull <$ eof) <|> pExprInner

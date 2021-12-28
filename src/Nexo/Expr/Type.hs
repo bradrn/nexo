@@ -76,13 +76,8 @@ data ExprF r
     | XOp Op r r
     | XUnit r UnitDef
     | XTApp r PType
+    | XNull
     deriving (Show, Functor)
 deriveShow1 ''ExprF
 
 type Expr = Fix ExprF
-
--- | An expression which returns zero. Useful when you need some Expr
--- but don’t care which one (e.g. for C interop).
-zeroExpr :: Expr
-zeroExpr = Fix $ XLit $ LNum 0
-

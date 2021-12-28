@@ -32,26 +32,32 @@ stdFnVals = fmap (second $ VPrimClosure . PrimClosure)
     [ ("If", \[cond, tcase, fcase] -> case cond of -- If logical Function
         VBool True -> tcase
         VBool False -> fcase
+        VNull -> VNull
         _ -> error "evalFun: bug in typechecker")
-    , ("Mean"     , \[VList list]       -> VNum $ mean (map extractNum list))
-    , ("Avg"      , \[VList list]       -> VNum $ mean (map extractNum list))
-    , ("PopStdDev", \[VList list]       -> VNum $ popStdDev (map extractNum list))
-    , ("Median"   , \[VList list]       -> VNum $ median (map extractNum list))
-    , ("Mode"     , \[VList list]       -> VNum $ mode (map extractNum list))
-    , ("Sin"      , \[VNum n]           -> VNum $ sin n)
-    , ("Cos"      , \[VNum n]           -> VNum $ cos n)
-    , ("Tan"      , \[VNum n]           -> VNum $ tan n)
-    , ("InvSin"   , \[VNum n]           -> VNum $ asin n)
-    , ("InvCos"   , \[VNum n]           -> VNum $ acos n)
-    , ("InvTan"   , \[VNum n]           -> VNum $ atan n)
-    , ("Root"     , \[VNum n1, VNum n2] -> VNum $ n1**(1/n2))
-    , ("Power"    , \[VNum n1, VNum n2] -> VNum $ n1**n2)
+    , ("Mean"     , handleNull $ \[VList list]       -> VNum $ mean (map extractNum list))
+    , ("Avg"      , handleNull $ \[VList list]       -> VNum $ mean (map extractNum list))
+    , ("PopStdDev", handleNull $ \[VList list]       -> VNum $ popStdDev (map extractNum list))
+    , ("Median"   , handleNull $ \[VList list]       -> VNum $ median (map extractNum list))
+    , ("Mode"     , handleNull $ \[VList list]       -> VNum $ mode (map extractNum list))
+    , ("Sin"      , handleNull $ \[VNum n]           -> VNum $ sin n)
+    , ("Cos"      , handleNull $ \[VNum n]           -> VNum $ cos n)
+    , ("Tan"      , handleNull $ \[VNum n]           -> VNum $ tan n)
+    , ("InvSin"   , handleNull $ \[VNum n]           -> VNum $ asin n)
+    , ("InvCos"   , handleNull $ \[VNum n]           -> VNum $ acos n)
+    , ("InvTan"   , handleNull $ \[VNum n]           -> VNum $ atan n)
+    , ("Root"     , handleNull $ \[VNum n1, VNum n2] -> VNum $ n1**(1/n2))
+    , ("Power"    , handleNull $ \[VNum n1, VNum n2] -> VNum $ n1**n2)
     , ("List"     , VList)                   -- List function used by Haskell for making lists
-    , ("GetField" , \case
+    , ("GetField" , handleNull $ \case
           [VRecord r, VText f] | Just v <- Map.lookup f r -> v
           [VTable  r, VText f] | Just v <- Map.lookup f r -> VList v
           _ -> error "GetField(,): bug in typechecker"
       ) ]
+
+handleNull :: ([Value e] -> Value e) -> [Value e] -> Value e
+handleNull f = \case
+    v | any (\case VNull -> True; _ -> False) v -> VNull
+      | otherwise -> f v
 
 extractNum :: Value e -> Double
 extractNum (VNum n) = n

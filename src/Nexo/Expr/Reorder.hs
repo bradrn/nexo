@@ -26,6 +26,7 @@ depends (XFun _ args) = fold args
 depends (XOp _ x1 x2) = x1 <> x2
 depends (XUnit x _) = x
 depends (XTApp x _) = x
+depends XNull = Set.empty
 
 topoSort :: ExprF (Set String, Expr) -> Expr
 topoSort = \case
