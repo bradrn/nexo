@@ -6,7 +6,6 @@ module Nexo.Expr.Type where
 
 import Data.Deriving (deriveShow1)
 import Data.Fix (Fix(..))
-import Data.List (intercalate)
 import Data.Maybe (listToMaybe)
 
 import qualified Data.Map.Strict as Map
