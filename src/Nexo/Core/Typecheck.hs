@@ -8,12 +8,12 @@
 module Nexo.Core.Typecheck where
 
 import Control.Monad ((<=<))
-import Control.Monad.Except (MonadError)
+import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.State.Strict (evalStateT)
 import Data.Bifunctor (second)
 import Data.Foldable (for_)
 import Data.Functor.Foldable (cata)
-import Data.Traversable (for)
+import Data.Traversable (for, forM)
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Merge.Strict as Map
@@ -159,20 +159,19 @@ inferStep = \case
         applyToEnv s
 
         pure (CApp (Right "List") elemsConverted, TList t)
-    XRecord r' -> do
+    XRecord Nonrecursive r' _ -> do
         r <- sequenceA r'
-        pure (CRec $ fst <$> r, TRecord $ snd <$> r)
-    XTable r' order -> do
-        tvs <- traverse ((fmap.fmap) TVar $ const fresh) r'
-        let tsDeclared = TList <$> tvs
+        pure (CRec Nonrecursive $ Map.toList $ fst <$> r, TRecord $ snd <$> r)
+    XRecord Recursive r' order -> do
+        tsDeclared <- traverse ((fmap.fmap) TVar $ const fresh) r'
 
         scope $ do
             _ <- Map.traverseWithKey (curry extend) $ Forall [] [] <$> tsDeclared
 
             let r'WithTvs :: Map.Map String (m (CoreExpr, Type), Type)
                 r'WithTvs = Map.merge
-                    (Map.mapMissing $ \_ _ -> error "inferStep: bug in XTable case")
-                    (Map.mapMissing $ \_ _ -> error "inferStep: bug in XTable case")
+                    (Map.mapMissing $ \_ _ -> error "inferStep: bug in XRecord Recursive case")
+                    (Map.mapMissing $ \_ _ -> error "inferStep: bug in XRecord Recursive case")
                     (Map.zipWithMatched $ const (,))
                     r' tsDeclared
 
@@ -188,12 +187,22 @@ inferStep = \case
                     ]
                 xConverted <- snd . fst <$> getConvertedExpr s rElem tDeclared
                 applyToEnv s
-                t <- whenJustElse "#TYPE" $ flip fmap (apply s tDeclared) $ \case
-                    TList t' -> t'
-                    _ -> error "inferStep: bug in XTable case"
+                t <- whenJustElse "#TYPE" $ apply s tDeclared
                 pure (name, (xConverted, t))
 
-            pure (CTab (second fst <$> r), TTable (snd <$> Map.fromList r))
+            pure (CRec Recursive (second fst <$> r), TRecord (snd <$> Map.fromList r))
+    XTable r' -> r' >>= \case
+        -- for 'Table', need to know AT POINT OF TYPECHECKING what the fields are
+        -- (unless we get fancy type-level extensible row types!)
+        (x, TRecord r) -> do
+            ts <- forM r $ \tSupplied -> do
+                tvar <- TVar <$> fresh
+                let tDeclared = TList tvar
+                s <- unify $ Unify tSupplied tDeclared
+                applyToEnv s
+                whenJustElse "#TYPE" $ apply s tvar
+            pure (CTab x, TTable ts)
+        (_, _) -> throwError "#TYPE"
     XVar v -> do
         t <- instantiate =<< lookupName v
         pure (CVar v, t)

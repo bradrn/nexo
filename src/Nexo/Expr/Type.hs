@@ -62,11 +62,14 @@ data Op
     | OOr       -- ^ Logical Or
     deriving (Show)
 
+data Recursivity = Nonrecursive | Recursive
+    deriving (Show)
+
 data ExprF r
     = XLit Literal
     | XList [r]
-    | XRecord (Map.Map String r)
-    | XTable (Map.Map String r) [String]
+    | XRecord Recursivity (Map.Map String r) [String]
+    | XTable r
     | XVar String
     | XLet String (Maybe PType) r r
     | XLam [String] r

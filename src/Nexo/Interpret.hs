@@ -140,11 +140,15 @@ evalExpr = para \case
     CLamF args (x, _) -> do
         env <- getEnv
         pure $ VClosure env args x
-    CRecF xs -> VRecord <$> sequenceA (snd <$> xs)
-    CTabF xs -> scope $ do
+    CRecF Nonrecursive xs -> VRecord . Map.fromList <$> sequenceA (liftTuple' <$> xs)
+    CRecF Recursive xs -> scope $ do
         traverse_ extend $ second snd <$> xs
         xs' <- traverse (liftTuple . second snd) xs
-        pure $ VTable $ Map.fromList $ fmap (second getList) xs'
+        pure $ VRecord $ Map.fromList xs'
+    CTabF (_, vs') ->
+        vs' >>= \case
+            VRecord vs -> pure $ VTable $ getList <$> vs
+            _ -> error "evalExpr.CTabF: bug in typechecker"
     CAppF (Left  op) es -> broadcast (pure . evalOp op) =<< traverse liftTuple' es
     CAppF (Right fn) es -> do
         v <- join $ lookupName fn

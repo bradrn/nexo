@@ -47,6 +47,9 @@ pOrderedRecordSpec p = fmap fromListWithOrder $
   where
     fromListWithOrder l = (Map.fromList l, fst <$> l)
 
+pRecursivity :: Parser Recursivity
+pRecursivity = (Recursive <$ symbol "rec") <|> pure Nonrecursive
+
 pUnit :: Parser UnitDef
 pUnit = do
     f <- factored
@@ -135,8 +138,8 @@ operatorTable =
 
 pTerm :: Parser Expr
 pTerm = wrap $ choice
-    [ try $ Fix . XRecord <$> paren (pRecordSpec pTerm)
-    , try $ Fix . uncurry XTable <$> (symbol "Table" *> paren (pOrderedRecordSpec pTerm))
+    [ try $ (Fix .) . uncurry3 XRecord <$> pRecursivity <*> paren (pOrderedRecordSpec pTerm)
+    , try $ Fix . XTable <$> (symbol "Table" *> paren pExprInner)
     , pLet
     , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
     , try pLam
@@ -147,6 +150,9 @@ pTerm = wrap $ choice
     , Fix . XList <$> sqparen (pExprInner `sepBy` symbol ",")
     ]
   where
+    uncurry3 :: (a -> b -> c -> x) -> (a -> (b,c) -> x)
+    uncurry3 f = \a (b,c) -> f a b c
+
     wrap :: Parser Expr -> Parser Expr
     wrap p = do
         r <- p

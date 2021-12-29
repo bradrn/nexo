@@ -52,31 +52,31 @@ values = testGroup "Values"
         testEvalExpr "(x: 1, y: True).x" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "(x: [1,2,3], y: True).x" @?= Just (Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1, 2, 3])
     , testCase "Tables" $ do
-        testEvalExpr "Table(x: [1,2,3], y: (x+1))" @?= Just
+        testEvalExpr "Table(rec (x: [1,2,3], y: (x+1)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno), ("y", TNum Uno)]
             , VTable $ Map.fromList [("x", VNum <$> [1,2,3]), ("y", VNum <$> [2,3,4])]
             )
-        testEvalExpr "Table(x: (y-1), y: [2,3,4])" @?= Just
+        testEvalExpr "Table(rec (x: (y-1), y: [2,3,4]))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno), ("y", TNum Uno)]
             , VTable $ Map.fromList [("x", VNum <$> [1,2,3]), ("y", VNum <$> [2,3,4])]
             )
-        testEvalExpr "Table(x: 1, y: (x+1))" @?= Nothing
-        testEvalExpr "Table(x: (y-1), y: [2,3,4]).x" @?= Just ( Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1,2,3])
-        testEvalExpr "Table(x: [[1]], y: (x+1))" @?= Just
+        testEvalExpr "Table(rec (x: 1, y: (x+1)))" @?= Nothing
+        testEvalExpr "Table(rec (x: (y-1), y: [2,3,4])).x" @?= Just ( Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1,2,3])
+        testEvalExpr "Table(rec (x: [[1]], y: (x+1)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList
                   [ ("x", TList (TNum Uno))
                   , ("y", TList (TNum Uno))
                   ]
             , VTable $ Map.fromList [("x",[VList [VNum 1]]), ("y",[VList [VNum 2]])]
             )
-        testEvalExpr "Table(y: (z+1), z: [[1]])" @?= Just
+        testEvalExpr "Table(rec (y: (z+1), z: [[1]]))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList
                   [ ("y", TList (TNum Uno))
                   , ("z", TList (TNum Uno))
                   ]
             , VTable $ Map.fromList [("y",[VList [VNum 2]]), ("z",[VList [VNum 1]])]
             )
-        testEvalExpr "Table(x: [1, Null])" @?= Just
+        testEvalExpr "Table((x: [1, Null]))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno)]
             , VTable $ Map.fromList [("x", [VNum 1, VNull])]
             )
@@ -141,7 +141,7 @@ units = testGroup "Units"
         testEvalExpr "1 m * 2 s" @?= Just (Forall [] [] $ TNum (UMul (UName "m") (UName "s")), VNum 2)
         testEvalExpr "[1,2,3] m + [4,5,6] km" @?= Just (Forall [] [] (TList (TNum (UName "m"))),VList [VNum 4001,VNum 5002,VNum 6003])
         testEvalExpr "[1 m, 2 km]" @?= Just (Forall [] [] (TList (TNum (UName "m"))),VList [VNum 1,VNum 2000])
-        testEvalExpr "Table(x: [1] m, y: (1 km + x))" @?= Just
+        testEvalExpr "Table(rec (x: [1] m, y: (1 km + x)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList
                   [ ("x", TNum (UName "m"))
                   , ("y", TNum (UMul (UName "m") (UFactor 1000)))

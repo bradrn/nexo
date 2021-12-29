@@ -16,8 +16,9 @@ import Nexo.Expr.Type
 depends :: ExprF (Set String) -> Set String
 depends (XLit _lit) = Set.empty
 depends (XList sets) = fold sets
-depends (XRecord r) = fold r
-depends (XTable t _ss) = fold t \\ Map.keysSet t
+depends (XRecord Nonrecursive r _ss) = fold r
+depends (XRecord Recursive r _ss) = fold r \\ Map.keysSet r
+depends (XTable r) = r
 depends (XVar v) = Set.singleton v
 depends (XLet v _ xv x) = xv <> (Set.delete v x)
 depends (XLam args x) = x \\ Set.fromList args
@@ -30,7 +31,7 @@ depends XNull = Set.empty
 
 topoSort :: ExprF (Set String, Expr) -> Expr
 topoSort = \case
-    XTable t _ -> Fix $ XTable (snd <$> t) (go $ restrictToTable $ fst <$> t)
+    XRecord rty r _ -> Fix $ XRecord rty (snd <$> r) (go $ restrictToTable $ fst <$> r)
     x -> Fix $ snd <$> x
   where
     -- preliminary step: remove all dependencies from outside table
