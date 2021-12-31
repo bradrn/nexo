@@ -81,9 +81,11 @@ unify (Unify TBool TBool) = pure nullSubst
 unify (Unify TText TText) = pure nullSubst
 unify (Unify (TVar (Undetermined v)) r) = bind v (Left r)
 unify (Unify r (TVar (Undetermined v))) = bind v (Left r)
-unify (Unify (TFun ts1 r1) (TFun ts2 r2)) =
-    let cs = Unify r1 r2 : zipWith Unify ts1 ts2
-    in solve cs
+unify (Unify (TFun ts1 r1) (TFun ts2 r2))
+    | length ts1 == length ts2 =
+        let cs = Unify r1 r2 : zipWith Unify ts1 ts2
+        in solve cs
+    | otherwise = throwError "#UNIFY"
 unify (Unify (TList t1) (TList t2)) = unify $ Unify t1 t2
 unify (Unify (TRecord r1) (TRecord r2)) = do
     let merged = Map.merge
