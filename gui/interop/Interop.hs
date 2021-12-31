@@ -62,7 +62,7 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
     case sequenceA (zipWith mkColumnExpr formulaeExprs colExprss) of
         Nothing -> poke successPtr cFalse >> newStablePtr (Fix XNull)
         Just columns ->
-            let xp = Fix $ XTable (Map.fromList $ zip headers columns) headers
+            let xp = Fix $ XTable $ Fix $ XRecord Recursive (Map.fromList $ zip headers columns) headers
             in poke successPtr cTrue >> newStablePtr xp
   where
     ptrToMaybe :: Storable a => Ptr a -> IO (Maybe a)
