@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE LambdaCase     #-}
 
 module Nexo.Expr.Parse
        ( parseMaybe
@@ -10,7 +11,7 @@ module Nexo.Expr.Parse
 import Control.Monad.Combinators.Expr
 import Data.Fix (Fix(..))
 import Data.Void ( Void )
-import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional, eof )
+import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional, eof, sepBy1 )
 import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )
 
 import qualified Data.Map.Strict as Map
@@ -73,15 +74,29 @@ pUnit = do
         ]
 
 pUnitType :: Parser UnitDef
-pUnitType = between (symbol "<") (symbol ">") pUnit <|> pure Uno
+pUnitType =
+    between (symbol "<") (symbol ">")
+        (pUnit <|> UVar <$> (char '\'' *> pIdentifier))
+    <|> pure Uno
 
 pType :: Parser Type
-pType = TNum <$> (symbol "Num" *> pUnitType)
-    <|> TBool <$ symbol "Bool"
-    <|> TText <$ symbol "Text"
-    <|> TRecord <$> paren (pRecordSpec pType)
-    <|> TTable <$> paren (pRecordSpec pType)
-    <|> TList <$> (symbol "List" *> pType)
+pType = do
+    t1 <- TNum <$> (symbol "Num" *> pUnitType)
+        <|> TBool <$ symbol "Bool"
+        <|> TText <$ symbol "Text"
+        <|> TRecord <$> paren (pRecordSpec pType)
+        <|> TTable <$> paren (pRecordSpec pType)
+        <|> TList <$> (symbol "List" *> pType)
+        <|> TVar <$> (char '\'' *> pIdentifier)
+        <|> pMultiArgFun
+    optional (symbol "->" *> pType) >>= pure . \case
+        Just t2 -> TFun [t1] t2
+        Nothing -> t1
+  where
+    pMultiArgFun = TFun
+        <$> paren (pType `sepBy1` symbol ",")
+        <* symbol "->"
+        <*> pType
 
 pPType :: Parser PType
 pPType = generalise <$> pType

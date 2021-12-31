@@ -109,6 +109,9 @@ functions = testGroup "Functions"
         testEvalExpr "1 : Bool" @?= Nothing
         testEvalExpr "[True,False] : List Bool" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
         testEvalExpr "[True,False] : Bool" @?= Nothing
+        fst <$> testEvalExpr "(x -> (x+1)) : Num -> Num" @?= Just (Forall [] [] $ TFun [TNum Uno] (TNum Uno))
+        fst <$> testEvalExpr "(x -> (x+1)) : Num<'u> -> Num<'u>" @?= Just (Forall [] ["a"] (TFun [TNum (UVar "a")] (TNum (UVar "a"))))
+        fst <$> testEvalExpr "(x -> (x+1)) : 't -> 't" @?= Nothing
     , testCase "Let" $ do
         testEvalExpr "Let(x = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "Let(x : Num = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
