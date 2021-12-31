@@ -84,11 +84,11 @@ pType = do
     t1 <- TNum <$> (symbol "Num" *> pUnitType)
         <|> TBool <$ symbol "Bool"
         <|> TText <$ symbol "Text"
+        <|> try pMultiArgFun
         <|> TRecord <$> paren (pRecordSpec pType)
         <|> TTable <$> paren (pRecordSpec pType)
         <|> TList <$> (symbol "List" *> pType)
         <|> TVar <$> (char '\'' *> pIdentifier)
-        <|> pMultiArgFun
     optional (symbol "->" *> pType) >>= pure . \case
         Just t2 -> TFun [t1] t2
         Nothing -> t1
