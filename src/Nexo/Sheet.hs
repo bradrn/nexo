@@ -15,7 +15,7 @@ module Nexo.Sheet
        , Cell(..)
        , ValueState(..)
        , GlobalEnv
-       , Eval
+       , Eval(..)
        , Value'
        , ValueState'
        , display

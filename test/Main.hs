@@ -35,8 +35,8 @@ literals = testGroup "Literals"
         testEvalExpr "\"\""            @?= Just (Forall [] [] TText, VText "")
         testEvalExpr "\"Hello world\"" @?= Just (Forall [] [] TText, VText "Hello world")
     , testCase "Null" $ do
-        testEvalExpr "" @?= Just (Forall ["a"] [] $ TVar "a", VNull)
-        testEvalExpr "Null" @?= Just (Forall ["a"] [] $ TVar "a", VNull)
+        testEvalExpr "" @?= Just (Forall ["a"] [] $ TVarR "a", VNull)
+        testEvalExpr "Null" @?= Just (Forall ["a"] [] $ TVarR "a", VNull)
     ]
 
 values :: TestTree
@@ -109,9 +109,15 @@ functions = testGroup "Functions"
         testEvalExpr "1 : Bool" @?= Nothing
         testEvalExpr "[True,False] : List Bool" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
         testEvalExpr "[True,False] : Bool" @?= Nothing
+        testEvalExpr "(x: 1, y: True) : (x: Num, y: Bool)" @?= Just
+            ( Forall [] [] $ TRecord (Map.fromList [("x", TNum Uno), ("y", TBool)])
+            , VRecord (Map.fromList [("x", VNum 1  ), ("y", VBool True)])
+            )
         fst <$> testEvalExpr "(x -> (x+1)) : Num -> Num" @?= Just (Forall [] [] $ TFun [TNum Uno] (TNum Uno))
-        fst <$> testEvalExpr "(x -> (x+1)) : Num<'u> -> Num<'u>" @?= Just (Forall [] ["a"] (TFun [TNum (UVar "a")] (TNum (UVar "a"))))
         fst <$> testEvalExpr "(x -> (x+1)) : 't -> 't" @?= Nothing
+        fst <$> testEvalExpr "((x,y) -> (x+y)) : Num<'u> -> Num<'u>" @?= Nothing
+        fst <$> testEvalExpr "((x,y) -> (x+y)) : (Num<'u>, Num<'u>) -> Num<'u>" @?=
+            Just (Forall [] ["u"] $ TFun [TNum (UVarR "u"), TNum (UVarR "u")] (TNum (UVarR "u")))
     , testCase "Let" $ do
         testEvalExpr "Let(x = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "Let(x : Num = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
@@ -119,11 +125,11 @@ functions = testGroup "Functions"
         testEvalExpr "Let(x : Num<m> = 1 km, x)" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1000)
         testEvalExpr "Let(x : Num<m> = 1 km, x + 1 m)" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1001)
     , testCase "Lambdas" $ do
-        fmap fst (testEvalExpr "a -> a") @?= Just (Forall ["a"] [] $ TFun [TVar "a"] $ TVar "a")
-        fmap fst (testEvalExpr "(a,b) -> a") @?= Just (Forall ["a","b"] [] $ TFun [TVar "a",TVar "b"] $ TVar "a")
+        fmap fst (testEvalExpr "a -> a") @?= Just (Forall ["a"] [] $ TFun [TVarR "a"] $ TVarR "a")
+        fmap fst (testEvalExpr "(a,b) -> a") @?= Just (Forall ["a","b"] [] $ TFun [TVarR "a",TVarR "b"] $ TVarR "a")
         fmap fst (testEvalExpr "a -> x") @?= Nothing
         fmap fst (testEvalExpr "num -> (num+1)") @?= Just (Forall [] [] $ TFun [TNum Uno] $ TNum Uno)
-        fmap fst (testEvalExpr "(num,num2) -> (num+num2)") @?= Just (Forall [] ["c"] $ TFun [TNum (UVar "c"),TNum (UVar "c")] $ TNum (UVar "c"))
+        fmap fst (testEvalExpr "(num,num2) -> (num+num2)") @?= Just (Forall [] ["c"] $ TFun [TNum (UVarR "c"),TNum (UVarR "c")] $ TNum (UVarR "c"))
     ]
 
 units :: TestTree
@@ -144,6 +150,8 @@ units = testGroup "Units"
         testEvalExpr "1 m * 2 s" @?= Just (Forall [] [] $ TNum (UMul (UName "m") (UName "s")), VNum 2)
         testEvalExpr "[1,2,3] m + [4,5,6] km" @?= Just (Forall [] [] (TList (TNum (UName "m"))),VList [VNum 4001,VNum 5002,VNum 6003])
         testEvalExpr "[1 m, 2 km]" @?= Just (Forall [] [] (TList (TNum (UName "m"))),VList [VNum 1,VNum 2000])
+        fst <$> testEvalExpr "x -> (x+1)" @?= Just (Forall [] [] (TFun [TNum Uno] (TNum Uno)))
+        fst <$> testEvalExpr "x -> (x+1m)" @?= Just (Forall [] [] (TFun [TNum (UName "m")] (TNum (UName "m"))))
         testEvalExpr "Table(rec (x: [1] m, y: (1 km + x)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList
                   [ ("x", TNum (UName "m"))

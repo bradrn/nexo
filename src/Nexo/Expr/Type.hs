@@ -1,16 +1,43 @@
 {-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveTraversable  #-}
+{-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 module Nexo.Expr.Type where
 
 import Data.Deriving (deriveShow1)
 import Data.Fix (Fix(..))
+import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Maybe (listToMaybe)
 
 import qualified Data.Map.Strict as Map
 
-import Nexo.Expr.Unit
+data TVar
+    = Rigid String
+    | Undetermined String  -- used only internally in type inference algorithm
+                           -- ideally this would be in a separate type, but this seems easier
+    deriving (Show, Eq, Ord)
+
+data UnitDef
+    = UName String
+    | UPrefix String
+    | UFactor Double
+    | UMul UnitDef UnitDef
+    | UDiv UnitDef UnitDef
+    | UExp UnitDef Int
+    | UVar TVar
+    deriving (Show, Ord)
+
+pattern Uno :: UnitDef
+pattern Uno = UFactor 1
+
+-- | Warning! Unless you know what you’re doing, it’s probably better
+-- to use 'concords' (from 'Nexo.Expr.Unit') when comparing units
+deriving instance Eq UnitDef
+
+makeBaseFunctor ''UnitDef
 
 -- | Data type listing all the types in Nexo
 data Type
@@ -24,9 +51,13 @@ data Type
     | TTable (Map.Map String Type)
     deriving (Show, Eq, Ord)
 
-type TVar = String
+pattern TVarR :: String -> Type
+pattern TVarR a = TVar (Rigid a)
 
-data PType = Forall [TVar] [TVar] Type
+pattern UVarR :: String -> UnitDef
+pattern UVarR a = UVar (Rigid a)
+
+data PType = Forall [String] [String] Type
     deriving (Show)
 
 -- | Warning: only use this in tests! This does not check for type

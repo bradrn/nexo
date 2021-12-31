@@ -266,7 +266,7 @@ inferStep = \case
             UnliftBy n _ -> pure (x, liftBy n $ TNum u)
             _            -> pure (x, TNum u)
     XTApp x' pty -> do
-        t' <- instantiate pty
+        let t' = instantiateRigid pty
         (x, t) <- x'
         s <- unify (Unify t t')
 
@@ -284,13 +284,13 @@ typecheck
 typecheck = flip evalStateT (0::Int) . fmap (second generalise) . cata inferStep
 
 optype :: MonadError String m => Op -> m PType
-optype OEq    = pure $ Forall [] ["a"]      $ TFun [TVar "a", TVar "a"] (TVar "a")
-optype ONeq   = pure $ Forall [] ["a"]      $ TFun [TVar "a", TVar "a"] (TVar "a")
-optype OPlus  = pure $ Forall [] ["u"]      $ TFun [TNum $ UVar "u", TNum $ UVar "u"] (TNum $ UVar "u")
-optype OMinus = pure $ Forall [] ["u"]      $ TFun [TNum $ UVar "u", TNum $ UVar "u"] (TNum $ UVar "u")
-optype OTimes = pure $ Forall [] ["u", "v"] $ TFun [TNum $ UVar "u", TNum $ UVar "v"] (TNum $ UMul (UVar "u") (UVar "v"))
-optype ODiv   = pure $ Forall [] ["u", "v"] $ TFun [TNum $ UVar "u", TNum $ UVar "v"] (TNum $ UMul (UVar "u") (UVar "v"))
-optype OGt    = pure $ Forall [] ["u"]      $ TFun [TNum $ UVar "u", TNum $ UVar "u"] TBool
-optype OLt    = pure $ Forall [] ["u"]      $ TFun [TNum $ UVar "u", TNum $ UVar "u"] TBool
+optype OEq    = pure $ Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a")
+optype ONeq   = pure $ Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a")
+optype OPlus  = pure $ Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u")
+optype OMinus = pure $ Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u")
+optype OTimes = pure $ Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UMul (UVarR "u") (UVarR "v"))
+optype ODiv   = pure $ Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UMul (UVarR "u") (UVarR "v"))
+optype OGt    = pure $ Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool
+optype OLt    = pure $ Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool
 optype OAnd   = pure $ Forall [] []         $ TFun [TBool, TBool] TBool
 optype OOr    = pure $ Forall [] []         $ TFun [TBool, TBool] TBool

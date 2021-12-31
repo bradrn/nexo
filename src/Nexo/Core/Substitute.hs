@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TupleSections     #-}
 
 module Nexo.Core.Substitute where
 
@@ -12,9 +13,8 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
 import Nexo.Expr.Type
-import Nexo.Expr.Unit
 
-type Subst = Map.Map TVar (Either Type UnitDef)
+type Subst = Map.Map String (Either Type UnitDef)
 
 nullSubst :: Subst
 nullSubst = Map.empty
@@ -39,11 +39,12 @@ instance Substitutable Type where
     apply s (TNum u) = TNum <$> apply s u
     apply _ TBool = Just TBool
     apply _ TText = Just TText
-    apply s (TVar v) =
+    apply s tv@(TVar (Undetermined v)) =
         case Map.lookup v s of
             Just (Left t) -> Just t
             Just (Right _) -> Nothing
-            Nothing -> Just $ TVar v
+            Nothing -> Just tv
+    apply _ tv@(TVar (Rigid _)) = Just tv
     apply s (TFun ts r) = TFun <$> traverse (apply s) ts <*> apply s r
     apply s (TList t) = TList <$> apply s t
     apply s (TRecord ts) = TRecord <$> traverse (apply s) ts
@@ -71,11 +72,12 @@ instance Substitutable UnitDef where
     apply s (UMul u v) = UMul <$> apply s u <*> apply s v
     apply s (UDiv u v) = UDiv <$> apply s u <*> apply s v
     apply s (UExp u x) = (`UExp` x) <$> apply s u
-    apply s (UVar v) =
+    apply s tv@(UVar (Undetermined v)) =
         case Map.lookup v s of
             Just (Left _) -> Nothing
             Just (Right t) -> Just t
-            Nothing -> Just $ UVar v
+            Nothing -> Just tv
+    apply _ tv@(UVar (Rigid _)) = Just tv
 
     frees (UName _) = (Set.empty, Set.empty)
     frees (UPrefix _) = (Set.empty, Set.empty)
@@ -90,18 +92,22 @@ instance Substitutable PType where
 
     frees (Forall as us t) =
         let (vs, xs) = frees t
-        in (vs `Set.difference` Set.fromList as, xs `Set.difference` Set.fromList us)
+        in ( vs `Set.difference` (Set.fromList $ Rigid <$> as)
+           , xs `Set.difference` (Set.fromList $ Rigid <$> us)
+           )
 
 occurs :: Substitutable a => TVar -> a -> Bool
 occurs a t =
     let (vs, us) = frees t
     in a `Set.member` Set.union vs us
 
-bind :: MonadError String m => TVar -> Either Type UnitDef -> m Subst
-bind v (Left (TVar v'))  | v == v' = pure nullSubst
-                         | occurs v (TVar v') = throwError "#INFT"
-bind v (Right (UVar v')) | v == v' = pure nullSubst
-                         | occurs v (UVar v') = throwError "#INFT"
+bind :: MonadError String m => String -> Either Type UnitDef -> m Subst
+bind v (Left (TVar v'))
+    | Undetermined v == v' = pure nullSubst
+    | occurs (Undetermined v) (TVar v') = throwError "#INFT"
+bind v (Right (UVar v'))
+    | Undetermined v == v' = pure nullSubst
+    | occurs (Undetermined v) (UVar v') = throwError "#INFT"
 bind v t = pure $ Map.singleton v t
 
 class Monad m => MonadFresh m where
@@ -111,20 +117,64 @@ instance Monad m => MonadFresh (StateT Int m) where
     fresh = do
         s <- get
         put (s+1)
-        pure $ letters !! s
+        pure $ Undetermined $ letters !! s
       where
         letters = [1..] >>= flip replicateM ['a'..'z']
 
 instantiate :: (MonadError String m, MonadFresh m) => PType -> m Type
 instantiate (Forall as us t) = do
-    as' <- for as $ const fresh
-    us' <- for us $ const fresh
-    let s = Map.fromList $
-                zip as (Left  . TVar <$> as') ++
-                zip us (Right . UVar <$> us')
-    maybe (throwError "#TYPE") pure $ apply s t
+    as' <- for as $ \a -> (a,) <$> fresh
+    us' <- for us $ \u -> (u,) <$> fresh
+    pure $ derigidify as' us' t
+  where
+    derigidify _   us' (TNum u) = TNum $ derigidifyU us' u
+    derigidify _   _   TBool = TBool
+    derigidify _   _   TText = TText
+    derigidify as' _   (TVar (Rigid v))
+        | Just v' <- lookup v as' = TVar v'
+    derigidify _   _   tv@(TVar _) = tv
+    derigidify as' us' (TFun tys ty') = TFun (derigidify as' us' <$> tys) (derigidify as' us' ty')
+    derigidify as' us' (TList ty') = TList (derigidify as' us' ty')
+    derigidify as' us' (TRecord r) = TRecord (derigidify as' us' <$> r)
+    derigidify as' us' (TTable r) = TTable (derigidify as' us' <$> r)
+
+    derigidifyU _   u@(UName _) = u
+    derigidifyU _   u@(UPrefix _) = u
+    derigidifyU _   u@(UFactor _) = u
+    derigidifyU us' (UMul u1 u2) = UMul (derigidifyU us' u1) (derigidifyU us' u2)
+    derigidifyU us' (UDiv u1 u2) = UDiv (derigidifyU us' u1) (derigidifyU us' u2)
+    derigidifyU us' (UExp u n) = UExp (derigidifyU us' u) n
+    derigidifyU us' (UVar (Rigid v))
+        | Just v' <- lookup v us' = UVar v'
+    derigidifyU _   uv@(UVar _) = uv
+
+-- Assumed input is well-formed i.e. all quantified type variables are 'Rigid'
+instantiateRigid :: PType -> Type
+instantiateRigid (Forall _ _ t) = t
 
 generalise :: Type -> PType
 generalise t =
     let (vs, us) = frees t
-    in Forall (Set.toList vs) (Set.toList us) t
+    in Forall (getName <$> Set.toList vs) (getName <$> Set.toList us) $ rigidify t
+  where
+    getName (Rigid v) = v
+    getName (Undetermined v) = v
+
+    rigidify (TNum u) = TNum $ rigidifyU u
+    rigidify TBool = TBool
+    rigidify TText = TText
+    rigidify (TVar (Undetermined v)) = TVarR v
+    rigidify tv@(TVar (Rigid _)) = tv
+    rigidify (TFun tys ty') = TFun (rigidify <$> tys) (rigidify ty')
+    rigidify (TList ty') = TList (rigidify ty')
+    rigidify (TRecord r) = TRecord (rigidify <$> r)
+    rigidify (TTable r) = TTable (rigidify <$> r)
+
+    rigidifyU u@(UName _) = u
+    rigidifyU u@(UPrefix _) = u
+    rigidifyU u@(UFactor _) = u
+    rigidifyU (UMul u1 u2) = UMul (rigidifyU u1) (rigidifyU u2)
+    rigidifyU (UDiv u1 u2) = UDiv (rigidifyU u1) (rigidifyU u2)
+    rigidifyU (UExp u n) = UExp (rigidifyU u) n
+    rigidifyU (UVar (Undetermined v)) = UVarR v
+    rigidifyU uv@(UVar (Rigid _)) = uv

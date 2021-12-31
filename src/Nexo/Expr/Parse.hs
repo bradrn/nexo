@@ -19,7 +19,6 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 import Nexo.Core.Substitute (generalise)
 import Nexo.Expr.Type
-import Nexo.Expr.Unit
 
 type Parser = Parsec Void String
 
@@ -76,7 +75,7 @@ pUnit = do
 pUnitType :: Parser UnitDef
 pUnitType =
     between (symbol "<") (symbol ">")
-        (pUnit <|> UVar <$> (char '\'' *> pIdentifier))
+        (pUnit <|> UVar . Rigid <$> (char '\'' *> pIdentifier))
     <|> pure Uno
 
 pType :: Parser Type
@@ -88,7 +87,7 @@ pType = do
         <|> TRecord <$> paren (pRecordSpec pType)
         <|> TTable <$> paren (pRecordSpec pType)
         <|> TList <$> (symbol "List" *> pType)
-        <|> TVar <$> (char '\'' *> pIdentifier)
+        <|> TVar . Rigid <$> (char '\'' *> pIdentifier)
     optional (symbol "->" *> pType) >>= pure . \case
         Just t2 -> TFun [t1] t2
         Nothing -> t1

@@ -13,28 +13,10 @@ module Nexo.Expr.Unit where
 import Control.Applicative (liftA2)
 import Data.Bifunctor (second)
 import Data.Functor.Foldable (cata)
-import Data.Functor.Foldable.TH (makeBaseFunctor)
 
 import qualified Data.Map.Strict as Map
 
-data UnitDef
-    = UName String
-    | UPrefix String
-    | UFactor Double
-    | UMul UnitDef UnitDef
-    | UDiv UnitDef UnitDef
-    | UExp UnitDef Int
-    | UVar String
-    deriving (Show, Ord)
-
-pattern Uno :: UnitDef
-pattern Uno = UFactor 1
-
--- | Warning! Unless you know what you’re doing, it’s probably better
--- to use 'concords' when comparing units
-deriving instance Eq UnitDef
-
-makeBaseFunctor ''UnitDef
+import Nexo.Expr.Type
 
 -- | If the first unit can be converted to the second unit, returns
 -- the conversion factor from the second to the first; else returns
@@ -55,7 +37,7 @@ concords (u:us) = u <$ traverse (concord u) us
 -- | A unit in simplified representation: a factor multiplied by a map
 -- from base units ('Left' case) or type variables ('Right' case) to
 -- exponents.
-type Unit = (Double, Map.Map (Either String String) Int)
+type Unit = (Double, Map.Map (Either String TVar) Int)
 
 unitToDef :: Unit -> UnitDef
 unitToDef (f, u) =
@@ -64,7 +46,7 @@ unitToDef (f, u) =
        | otherwise
          -> foldr (UMul . term) (UFactor f) (Map.toList u)
   where
-    term :: (Either String String, Int) -> UnitDef
+    term :: (Either String TVar, Int) -> UnitDef
     term (Left name, 1) = UName name
     term (Right var, 1) = UVar var
     term (Left name, n) = UExp (UName name) n
@@ -84,7 +66,7 @@ simplify = fmap (second $ Map.filter (/=0)) . cata \case
     div' (f, u) (g, v) = (f/g, Map.unionWith (+) u $ negate <$> v)
     exp' x (f, u) = (f^^x, (*x) <$> u)
 
-expandName :: String -> Maybe (Double, Map.Map (Either String String) Int)
+expandName :: String -> Maybe (Double, Map.Map (Either String TVar) Int)
 expandName "s"   = Just (1, Map.singleton (Left "s") 1)
 expandName "m"   = Just (1, Map.singleton (Left "m") 1)
 expandName "g"   = Just (1, Map.singleton (Left "g") 1)

@@ -79,8 +79,8 @@ unify (Subtype t1 t2) = unify (Unify t1 t2)
 unify (Unify (TNum u) (TNum v)) = unifyU u v
 unify (Unify TBool TBool) = pure nullSubst
 unify (Unify TText TText) = pure nullSubst
-unify (Unify (TVar v) r) = bind v (Left r)
-unify (Unify r (TVar v)) = bind v (Left r)
+unify (Unify (TVar (Undetermined v)) r) = bind v (Left r)
+unify (Unify r (TVar (Undetermined v))) = bind v (Left r)
 unify (Unify (TFun ts1 r1) (TFun ts2 r2)) =
     let cs = Unify r1 r2 : zipWith Unify ts1 ts2
     in solve cs
@@ -109,7 +109,7 @@ unifyU ud vd = join $ whenJustElse "#UNIFY" $ go <$> simplify ud <*> simplify vd
     go :: MonadError String m => Unit -> Unit -> m Subst
     go (f, u) (g, v)
         | (units, uvars) <- splitEither u
-        , [(Right t, x)] <- Map.toList uvars
+        , [(Right (Undetermined t), x)] <- Map.toList uvars
         = do -- in this case there is only one type varialble
              -- proceed by moving rest to other side and taking the root
             let v' = Map.merge
@@ -124,7 +124,7 @@ unifyU ud vd = join $ whenJustElse "#UNIFY" $ go <$> simplify ud <*> simplify vd
             bind t (Right $ unitToDef ((g/f)**(1/fromIntegral x), v''))
 
         | (vnits, vvars) <- splitEither v
-        , [(Right t, x)] <- Map.toList vvars
+        , [(Right (Undetermined t), x)] <- Map.toList vvars
         = do -- same as last case, but in reverse
             let u' = Map.merge
                     Map.preserveMissing              -- preserve LHS exponents

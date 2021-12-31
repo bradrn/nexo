@@ -3,7 +3,6 @@
 module Nexo.Env.Std where
 
 import Nexo.Expr.Type
-import Nexo.Expr.Unit
 import qualified Data.Map.Strict as Map
 import Data.List (sort)
 import Nexo.Interpret
@@ -11,12 +10,12 @@ import Data.Bifunctor (second)
 
 stdFnTs :: [(String, PType)]
 stdFnTs =
-    [ ("If"        , Forall ["a"] [] $ TFun [TBool, TVar "a", TVar "a"] (TVar "a"))
-    , ("Mean"      , Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u"))
-    , ("Avg"       , Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u"))
-    , ("PopStdDev" , Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u"))
-    , ("Median"    , Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u"))
-    , ("Mode"      , Forall [] ["u"] $ TFun [TList (TNum $ UVar "u")] (TNum $ UVar "u"))
+    [ ("If"        , Forall ["a"] [] $ TFun [TBool, TVarR "a", TVarR "a"] (TVarR "a"))
+    , ("Mean"      , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
+    , ("Avg"       , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
+    , ("PopStdDev" , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
+    , ("Median"    , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
+    , ("Mode"      , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
     , ("Sin"       , Forall [] []    $ TFun [TNum (UName "rad")] (TNum Uno))
     , ("Cos"       , Forall [] []    $ TFun [TNum (UName "rad")] (TNum Uno))
     , ("Tan"       , Forall [] []    $ TFun [TNum (UName "rad")] (TNum Uno))
