@@ -19,6 +19,7 @@ import qualified Data.Map.Strict as Map
 
 import Nexo.Expr.Parse
 import Nexo.Expr.Type
+import Nexo.Expr.Type.Annotated (delocalise)
 import Nexo.Interpret (Value(..), render)
 import Nexo.Sheet
 
@@ -34,7 +35,7 @@ hsParseExpr cinput successPtr = do
     input <- GHC.peekCString utf8 cinput
     case parseMaybe pExpr input of
         Nothing -> poke successPtr cFalse >> newStablePtr (Fix XNull, Free XNull)
-        Just xp -> poke successPtr cTrue  >> newStablePtr (xp, partialise xp)
+        Just (delocalise -> xp) -> poke successPtr cTrue >> newStablePtr (xp, partialise xp)
 
 hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr (Expr, Free ExprF String))
 hsParseLiteralList clen cinput successPtr = do
@@ -62,7 +63,9 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
     colss <- (traverse.traverse) (GHC.peekCString utf8) ccolss
     let colExprss = (fmap.traverse) (parseMaybe pExpr) colss
 
-    let columns'        = zipWithM mkColumnExpr formulaeExprs colExprss
+    let columns' = zipWithM mkColumnExpr
+            ((fmap.fmap) delocalise formulaeExprs)
+            ((fmap.fmap.fmap) delocalise colExprss)
         columnsPartial' = zipWithM mkColumnPartialExpr formulae colss
 
     case (,) <$> columns' <*> columnsPartial' of

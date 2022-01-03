@@ -5,12 +5,13 @@ import Data.Traversable (for)
 
 import Nexo.Expr.Parse
 import Nexo.Expr.Type
+import Nexo.Expr.Type.Annotated (delocalise)
 import Nexo.Interpret
 import Nexo.Sheet
 
 testEvalExpr :: String -> Maybe (PType, Value GlobalEnv)
 testEvalExpr xstr = do
-    x <- parseMaybe pExpr xstr
+    x <- delocalise <$> parseMaybe pExpr xstr
     let c = Cell "test" Nothing Nothing x Invalidated ValueCell
         s = Sheet $ Map.singleton 0 c
         Sheet s' = evalSheet s
@@ -22,7 +23,7 @@ testEvalExpr xstr = do
 testEvalExprs :: [(String, String)] -> Maybe (PType, Value GlobalEnv)
 testEvalExprs xstrs = do
     cs <- for xstrs $ \(n, xstr) -> do
-        x <- parseMaybe pExpr xstr
+        x <- delocalise <$> parseMaybe pExpr xstr
         pure $ Cell n Nothing Nothing x Invalidated ValueCell
     let s = Sheet $ Map.fromList $ zip [0..] cs
         Sheet s' = evalSheet s

@@ -11,7 +11,7 @@ module Nexo.Expr.Parse
 import Control.Monad.Combinators.Expr
 import Data.Fix (Fix(..))
 import Data.Void ( Void )
-import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional, eof, sepBy1 )
+import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional, eof, sepBy1, getSourcePos )
 import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )
 
 import qualified Data.Map.Strict as Map
@@ -19,8 +19,19 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 import Nexo.Core.Substitute (generalise)
 import Nexo.Expr.Type
+import Nexo.Expr.Type.Annotated
 
 type Parser = Parsec Void String
+
+annotateLoc' :: (SourceSpan -> a -> b) -> Parser a -> Parser b
+annotateLoc' ann p = do
+    start <- getSourcePos
+    r <- p
+    end <- getSourcePos
+    pure $ ann SourceSpan{spanStart=start, spanEnd=end} r
+
+annotateLoc :: Parser (ExprF ExprLoc) -> Parser ExprLoc
+annotateLoc = annotateLoc' $ (Fix .) . ExprLocF
 
 sc :: Parser ()
 sc = L.space space1 empty empty
@@ -110,73 +121,74 @@ pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
     pString :: Parser String
     pString = char '"' *> (L.charLiteral `manyTill` char '"')
 
-pLet :: Parser Expr
-pLet = symbol "Let" *> paren do
+pLet :: Parser ExprLoc
+pLet = annotateLoc $ symbol "Let" *> paren do
     v <- pIdentifier
     vt <- optional $ symbol ":" *> pPType
     _ <- symbol "="
     vx <- pExprInner
     _ <- symbol ","
     x <- pExprInner
-    pure $ Fix $ XLet v vt vx x
+    pure $ XLet v vt vx x
     
 
-pLam :: Parser Expr
-pLam = (Fix .) . XLam <$> args <* symbol "->" <*> pTerm
+pLam :: Parser ExprLoc
+pLam = annotateLoc $ XLam <$> args <* symbol "->" <*> pTerm
   where
     args = paren (pIdentifier `sepBy` symbol ",")
         <|> (pure <$> pIdentifier)
     
-operatorTable :: [[Operator Parser Expr]]
+operatorTable :: [[Operator Parser ExprLoc]]
 operatorTable =
-    [ [ binary "*" $ wrap $ XOp OTimes
-      , binary "/" $ wrap $ XOp ODiv
+    [ [ binary "*" $ XOp OTimes
+      , binary "/" $ XOp ODiv
       ]
-    , [ binary "+" $ wrap $ XOp OPlus
-      , binary "-" $ wrap $ XOp OMinus
+    , [ binary "+" $ XOp OPlus
+      , binary "-" $ XOp OMinus
       ]
-    , [ binary "=" $ wrap $ XOp OEq
-      , binary "<>" $ wrap $ XOp ONeq
-      , binary ">" $ wrap $ XOp OGt
-      , binary "<" $ wrap $ XOp OLt
+    , [ binary "=" $ XOp OEq
+      , binary "<>" $ XOp ONeq
+      , binary ">" $ XOp OGt
+      , binary "<" $ XOp OLt
       ]
-    , [ binary "&&" $ wrap $ XOp OAnd
-      , binary "||" $ wrap $ XOp OOr
+    , [ binary "&&" $ XOp OAnd
+      , binary "||" $ XOp OOr
       ]
     ]
   where
-    binary name f = InfixL (f <$ symbol name)
+    binary :: String -> (ExprLoc -> ExprLoc -> ExprF ExprLoc) -> Operator Parser ExprLoc
+    binary name f = InfixL (annotateLoc' wrap $ f <$ symbol name)
 
-    wrap :: (Expr -> Expr -> ExprF Expr) -> Expr -> Expr -> Expr
-    wrap e x y = Fix $ e x y
+    wrap :: SourceSpan -> (ExprLoc -> ExprLoc -> ExprF ExprLoc) -> ExprLoc -> ExprLoc -> ExprLoc
+    wrap s f x1 x2 = Fix $ ExprLocF s $ f x1 x2
 
-pTerm :: Parser Expr
+pTerm :: Parser ExprLoc
 pTerm = wrap $ choice
-    [ try $ (Fix .) . uncurry3 XRecord <$> pRecursivity <*> paren (pOrderedRecordSpec pTerm)
-    , try $ Fix . XTable <$> (symbol "Table" *> paren pExprInner)
+    [ try $ annotateLoc $ uncurry3 XRecord <$> pRecursivity <*> paren (pOrderedRecordSpec pTerm)
+    , try $ annotateLoc $ XTable <$> (symbol "Table" *> paren pExprInner)
     , pLet
-    , try $ (Fix .) . XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
+    , try $ annotateLoc $ XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
     , try pLam
     , paren pExprInner
-    , Fix . XLit <$> pLit
-    , Fix XNull <$ symbol "Null"
-    , Fix . XVar <$> pIdentifier
-    , Fix . XList <$> sqparen (pExprInner `sepBy` symbol ",")
+    , annotateLoc $ XLit <$> pLit
+    , annotateLoc $ XNull <$ symbol "Null"
+    , annotateLoc $ XVar <$> pIdentifier
+    , annotateLoc $ XList <$> sqparen (pExprInner `sepBy` symbol ",")
     ]
   where
     uncurry3 :: (a -> b -> c -> x) -> (a -> (b,c) -> x)
     uncurry3 f = \a (b,c) -> f a b c
 
-    wrap :: Parser Expr -> Parser Expr
+    wrap :: Parser ExprLoc -> Parser ExprLoc
     wrap p = do
         r <- p
-        (Fix . XField r <$> (symbol "." *> pIdentifier))
-            <|> (Fix . XTApp r <$> (symbol ":" *> pPType))
-            <|> (Fix . XUnit r <$> pUnit)
+        annotateLoc (XField r <$> (symbol "." *> pIdentifier))
+            <|> annotateLoc (XTApp r <$> (symbol ":" *> pPType))
+            <|> annotateLoc (XUnit r <$> pUnit)
             <|> pure r
 
-pExprInner :: Parser Expr
+pExprInner :: Parser ExprLoc
 pExprInner = makeExprParser pTerm operatorTable
 
-pExpr :: Parser Expr
-pExpr = (Fix XNull <$ eof) <|> pExprInner
+pExpr :: Parser ExprLoc
+pExpr = annotateLoc (XNull <$ eof) <|> pExprInner
