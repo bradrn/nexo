@@ -7,8 +7,11 @@
 
 module Nexo.Expr.Type where
 
+import Control.Monad.Free (Free)
+import Control.Monad.Trans.Free (FreeF(Free))
 import Data.Deriving (deriveShow1)
 import Data.Fix (Fix(..))
+import Data.Functor.Foldable (Recursive, Corecursive, Base, hoist)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Maybe (listToMaybe)
 
@@ -114,3 +117,6 @@ data ExprF r
 deriveShow1 ''ExprF
 
 type Expr = Fix ExprF
+
+partialise :: (Recursive t, Corecursive t) => t -> Free (Base t) a
+partialise = hoist Free

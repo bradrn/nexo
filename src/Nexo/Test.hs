@@ -11,7 +11,7 @@ import Nexo.Sheet
 testEvalExpr :: String -> Maybe (PType, Value GlobalEnv)
 testEvalExpr xstr = do
     x <- parseMaybe pExpr xstr
-    let c = Cell "test" Nothing x Invalidated
+    let c = Cell "test" Nothing Nothing x Invalidated ValueCell
         s = Sheet $ Map.singleton 0 c
         Sheet s' = evalSheet s
     val <- cellValue <$> Map.lookup 0 s'
@@ -23,7 +23,7 @@ testEvalExprs :: [(String, String)] -> Maybe (PType, Value GlobalEnv)
 testEvalExprs xstrs = do
     cs <- for xstrs $ \(n, xstr) -> do
         x <- parseMaybe pExpr xstr
-        pure $ Cell n Nothing x Invalidated
+        pure $ Cell n Nothing Nothing x Invalidated ValueCell
     let s = Sheet $ Map.fromList $ zip [0..] cs
         Sheet s' = evalSheet s
     val <- cellValue <$> Map.lookup 0 s'

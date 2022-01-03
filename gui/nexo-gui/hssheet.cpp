@@ -27,7 +27,7 @@ void HsSheet::insertCell(int key, QString name, QString type, QString expr)
     }
 
     HsStablePtr ptype = hsMaybeParseType(type.toUtf8().data());
-    HsStablePtr cell = hsMkCell(name.toUtf8().data(), ptype, pexpr);
+    HsStablePtr cell = hsMkCell(name.toUtf8().data(), HsValue::CellType::ValueCell, ptype, pexpr);
     hsInsert(key, cell, hsSheet);
 
     hs_free_stable_ptr(cell);
@@ -63,7 +63,7 @@ void HsSheet::insertLiteralList(int key, QString name, QString type, QStringList
     }
 
     HsStablePtr ptype = hsMaybeParseType(const_cast<char *>(type.toUtf8().constData()));
-    HsStablePtr cell = hsMkCell(name.toUtf8().data(), ptype, pexpr);
+    HsStablePtr cell = hsMkCell(name.toUtf8().data(), HsValue::CellType::InputList, ptype, pexpr);
     hsInsert(key, cell, hsSheet);
 
     hs_free_stable_ptr(cell);
@@ -125,7 +125,7 @@ void HsSheet::insertTable(
         goto free;
 
     {
-        HsStablePtr cell = hsMkCell(name.toUtf8().data(), hsNothing(), pexpr);
+        HsStablePtr cell = hsMkCell(name.toUtf8().data(), HsValue::CellType::TableValue, hsNothing(), pexpr);
         hsInsert(key, cell, hsSheet);
         hsEvalSheet(hsSheet);
         emit reevaluated();

@@ -136,7 +136,7 @@ operatorTable =
       , binary "-" $ wrap $ XOp OMinus
       ]
     , [ binary "=" $ wrap $ XOp OEq
-      , binary "<>" $ wrap $ XOp OEq
+      , binary "<>" $ wrap $ XOp ONeq
       , binary ">" $ wrap $ XOp OGt
       , binary "<" $ wrap $ XOp OLt
       ]

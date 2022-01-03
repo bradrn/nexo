@@ -22,3 +22,4 @@ library
                      , nexo
                      , containers >= 0.6 && < 0.7
                      , data-fix >= 0.3 && < 0.4
+                     , free >= 5.1 && < 5.2

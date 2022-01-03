@@ -20,6 +20,13 @@ public:
         Unknown = 0
     };
 
+    enum CellType
+    {
+        ValueCell = 0,
+        InputList = 1,
+        TableValue = 2
+    };
+
     HsValue(HsStablePtr value, ValueType type);
     HsValue(HsValue&& hsValue);
     ~HsValue();

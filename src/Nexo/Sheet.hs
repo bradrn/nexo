@@ -12,6 +12,7 @@
 
 module Nexo.Sheet
        ( Sheet(..)
+       , Widget(..)
        , Cell(..)
        , ValueState(..)
        , GlobalEnv
@@ -24,6 +25,7 @@ module Nexo.Sheet
        ) where
 
 import Control.Monad.Except (runExceptT, MonadError(..), ExceptT(..))
+import Control.Monad.Free (Free)
 import Control.Monad.State.Strict
     ( gets, modify', State, StateT (..), MonadState(..) )
 import Control.Monad.Trans (lift)
@@ -65,11 +67,16 @@ toEither Invalidated = Left "#INVALIDATED"
 type ValueState' = ValueState GlobalEnv
 type Value' = Value GlobalEnv
 
+data Widget = ValueCell | InputList | Table
+    deriving (Show)
+
 data Cell = Cell
     { cellName :: String
     , cellType :: Maybe PType
+    , cellRaw :: Maybe (Free ExprF String)
     , cellExpr :: Expr
     , cellValue :: ValueState GlobalEnv
+    , cellWidget :: Widget
     } deriving (Show)
 
 newtype Sheet = Sheet { getSheet :: Map.Map Int Cell }
