@@ -5,10 +5,10 @@ module Nexo.Expr.Parse
        ( parseMaybe
        , pPType
        , pExpr
+       , pExprInner
        , pLit
        ) where
 
-import Control.Monad.Combinators.Expr
 import Data.Fix (Fix(..))
 import Data.Void ( Void )
 import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional, eof, sepBy1, getSourcePos )
@@ -137,30 +137,6 @@ pLam = annotateLoc $ XLam <$> args <* symbol "->" <*> pTerm
   where
     args = paren (pIdentifier `sepBy` symbol ",")
         <|> (pure <$> pIdentifier)
-    
-operatorTable :: [[Operator Parser ExprLoc]]
-operatorTable =
-    [ [ binary "*" $ XOp OTimes
-      , binary "/" $ XOp ODiv
-      ]
-    , [ binary "+" $ XOp OPlus
-      , binary "-" $ XOp OMinus
-      ]
-    , [ binary "=" $ XOp OEq
-      , binary "<>" $ XOp ONeq
-      , binary ">" $ XOp OGt
-      , binary "<" $ XOp OLt
-      ]
-    , [ binary "&&" $ XOp OAnd
-      , binary "||" $ XOp OOr
-      ]
-    ]
-  where
-    binary :: String -> (ExprLoc -> ExprLoc -> ExprF ExprLoc) -> Operator Parser ExprLoc
-    binary name f = InfixL (annotateLoc' wrap $ f <$ symbol name)
-
-    wrap :: SourceSpan -> (ExprLoc -> ExprLoc -> ExprF ExprLoc) -> ExprLoc -> ExprLoc -> ExprLoc
-    wrap s f x1 x2 = Fix $ ExprLocF s $ f x1 x2
 
 pTerm :: Parser ExprLoc
 pTerm = wrap $ choice
@@ -188,7 +164,24 @@ pTerm = wrap $ choice
             <|> pure r
 
 pExprInner :: Parser ExprLoc
-pExprInner = makeExprParser pTerm operatorTable
+pExprInner = prec4
+  where
+    prec4 = mkOp prec3 $ (OTimes <$ symbol "*") <|> (ODiv <$ symbol "/")
+    prec3 = mkOp prec2 $ (OPlus <$ symbol "+") <|> (OMinus <$ symbol "-")
+    prec2 = mkOp prec1 $
+        OEq <$ symbol "="
+        <|> ONeq <$ symbol "<>"
+        <|> OGt <$ symbol ">"
+        <|> OLt <$ symbol "<"
+    prec1 = mkOp pTerm $ (OAnd <$ symbol "&&") <|> (OOr <$ symbol "||")
+
+    mkOp :: Parser ExprLoc -> Parser Op -> Parser ExprLoc
+    mkOp p po = go
+      where
+        go = annotateLoc' mkExprLoc $ (,) <$> p <*> optional ((,) <$> po <*> go)
+
+        mkExprLoc _     (xloc, Nothing) = xloc
+        mkExprLoc sspan (xloc1, Just (op, xloc2)) = Fix $ ExprLocF sspan $ XOp op xloc1 xloc2
 
 pExpr :: Parser ExprLoc
 pExpr = annotateLoc (XNull <$ eof) <|> pExprInner
