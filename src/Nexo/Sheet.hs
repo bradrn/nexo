@@ -67,16 +67,18 @@ toEither Invalidated = Left "#INVALIDATED"
 type ValueState' = ValueState GlobalEnv
 type Value' = Value GlobalEnv
 
-data Widget = ValueCell | InputList | Table
+data Widget
+    = ValueCell String
+    | InputList [String]
+    | Table [(String, [String])]
     deriving (Show)
 
 data Cell = Cell
     { cellName :: String
     , cellType :: Maybe PType
-    , cellRaw :: Maybe (Free ExprF String)
+    , cellWidget :: Widget
     , cellExpr :: Expr
     , cellValue :: ValueState GlobalEnv
-    , cellWidget :: Widget
     } deriving (Show)
 
 newtype Sheet = Sheet { getSheet :: Map.Map Int Cell }

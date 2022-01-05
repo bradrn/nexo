@@ -85,14 +85,15 @@ renderPartialExpr = cata $ \case
 
 renderCell :: Cell -> String
 renderCell Cell{..} =
-    defName ++ '(' : cellName ++ optionalCellType ++ ", " ++ renderedCell ++ ")"
+    defName ++ '(' : cellName ++ optionalCellType ++ ", " ++ renderPartialExpr cellRaw ++ ")"
   where
-    renderedCell = maybe (renderExpr cellExpr) renderPartialExpr cellRaw
-
-    defName = case cellWidget of
-        ValueCell -> "DefValue"
-        InputList -> "DefList"
-        Table -> "DefTable"
+    (defName, cellRaw) = case cellWidget of
+        ValueCell s -> ("DefValue", Pure s)
+        InputList ss -> ("DefList", Free $ XList $ Pure <$> ss)
+        Table ss ->
+            ("DefTable"
+            , Free $ XTable $ Free $ XRecord Recursive (Free . XList . fmap Pure <$> Map.fromList ss) (fst <$> ss)
+            )
 
     optionalCellType = case cellType of
         Nothing -> ""

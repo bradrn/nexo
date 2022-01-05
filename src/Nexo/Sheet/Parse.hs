@@ -4,7 +4,6 @@
 module Nexo.Sheet.Parse where
 
 import Control.Applicative.Combinators (many)
-import Control.Monad.Free
 import Data.Fix
 import Data.Functor ((<&>))
 import Data.Traversable (for)
@@ -29,10 +28,9 @@ mkDef s (Fix (ExprLocF _ (XFun f [Fix (ExprLocF _ var), Fix xloc]))) =
             in Just Cell
                 { cellName = name
                 , cellType = type_
-                , cellRaw = Just $ Pure raw
+                , cellWidget = ValueCell raw
                 , cellExpr =  Fix $ delocalise <$> spanExpr xloc
                 , cellValue = Invalidated
-                , cellWidget = ValueCell
                 }
         "DefList" -> case xloc of
             ExprLocF _ (XList xs) ->
@@ -40,27 +38,24 @@ mkDef s (Fix (ExprLocF _ (XFun f [Fix (ExprLocF _ var), Fix xloc]))) =
                 in Just Cell
                     { cellName = name
                     , cellType = type_
-                    , cellRaw = Just $ Free $ XList $ Pure <$> texts
+                    , cellWidget = InputList texts
                     , cellExpr = Fix $ delocalise <$> spanExpr xloc
                     , cellValue = Invalidated
-                    , cellWidget = InputList
                     }
             _ -> Nothing
         "DefTable" -> case xloc of
-            ExprLocF _ (XTable (Fix (ExprLocF _ (XRecord rec r order)))) ->
-                let rawR :: Maybe (Map.Map String (Free ExprF String))
-                    rawR = for r $ \case
-                        Fix (ExprLocF _ (XList xs)) -> Just $ Free $ XList $
-                            xs <&> \(Fix (ExprLocF xspan _)) ->
-                                Pure $ extractSpan xspan s
+            ExprLocF _ (XTable (Fix (ExprLocF _ (XRecord Recursive r order)))) ->
+                let raw :: Maybe [(String, [String])]
+                    raw = for order $ \k -> case Map.lookup k r of
+                        Just (Fix (ExprLocF _ (XList xs))) -> Just
+                            (k, xs <&> \(Fix (ExprLocF xspan _)) -> extractSpan xspan s)
                         _ -> Nothing
-                in rawR <&> \rawR' -> Cell
+                in raw <&> \raw' -> Cell
                     { cellName = name
                     , cellType = type_
-                    , cellRaw = Just $ Free $ XTable $ Free $ XRecord rec rawR' order
+                    , cellWidget = Table raw'
                     , cellExpr = Fix $ delocalise <$> spanExpr xloc
                     , cellValue = Invalidated
-                    , cellWidget = Table
                     }
             _ -> Nothing
         _ -> Nothing
