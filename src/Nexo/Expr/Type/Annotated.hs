@@ -1,9 +1,11 @@
 {-# LANGUAGE DeriveFunctor   #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns    #-}
 
 module Nexo.Expr.Type.Annotated where
 
+import Data.Deriving (deriveShow1)
 import Data.Fix (Fix)
 import Data.Functor.Foldable (hoist)
 import Text.Megaparsec.Pos (SourcePos(..), unPos)
@@ -32,6 +34,7 @@ data ExprLocF r = ExprLocF
     { span :: SourceSpan
     , spanExpr :: ExprF r
     } deriving (Show, Functor)
+deriveShow1 ''ExprLocF
 
 -- TODO: use to give nicer typechecker errors also
 type ExprLoc = Fix ExprLocF
