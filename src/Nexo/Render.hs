@@ -40,7 +40,14 @@ renderStep (XTApp s t) = "(" ++ s ++ ") : " ++ renderType t
 renderStep XNull = "Null"
 
 renderUnit :: UnitDef -> String
-renderUnit = error "not implemented"
+renderUnit (UName s) = s
+renderUnit (UPrefix s) = s
+renderUnit (UFactor x) = show x
+renderUnit (UMul u1 u2) = renderUnit u1 ++ ' ' : renderUnit u2
+renderUnit (UDiv u1 u2) = renderUnit u1 ++ '/' : renderUnit u2
+renderUnit (UExp u n) = renderUnit u ++ '^' : show n
+renderUnit (UVar (Rigid v)) = '\'' : v
+renderUnit (UVar (Undetermined v)) = '\'' : v
 
 renderOp :: Op -> String
 renderOp OPlus  = "+"
