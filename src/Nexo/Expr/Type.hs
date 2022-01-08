@@ -24,8 +24,7 @@ data TVar
     deriving (Show, Eq, Ord)
 
 data UnitDef
-    = UName String
-    | UPrefix String
+    = ULeaf String
     | UFactor Double
     | UMul UnitDef UnitDef
     | UDiv UnitDef UnitDef

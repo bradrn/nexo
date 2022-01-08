@@ -66,8 +66,7 @@ instance Substitutable Type where
             (vs, us) -> (Set.unions vs, Set.unions us)
 
 instance Substitutable UnitDef where
-    apply _ n@(UName _)   = Just n
-    apply _ p@(UPrefix _) = Just p
+    apply _ n@(ULeaf _)   = Just n
     apply _ f@(UFactor _) = Just f
     apply s (UMul u v) = UMul <$> apply s u <*> apply s v
     apply s (UDiv u v) = UDiv <$> apply s u <*> apply s v
@@ -79,8 +78,7 @@ instance Substitutable UnitDef where
             Nothing -> Just tv
     apply _ tv@(UVar (Rigid _)) = Just tv
 
-    frees (UName _) = (Set.empty, Set.empty)
-    frees (UPrefix _) = (Set.empty, Set.empty)
+    frees (ULeaf _) = (Set.empty, Set.empty)
     frees (UFactor _) = (Set.empty, Set.empty)
     frees (UMul u v) = (Set.empty, snd (frees u) `Set.union` snd (frees v))
     frees (UDiv u v) = (Set.empty, snd (frees u) `Set.union` snd (frees v))
@@ -138,8 +136,7 @@ instantiate (Forall as us t) = do
     derigidify as' us' (TRecord r) = TRecord (derigidify as' us' <$> r)
     derigidify as' us' (TTable r) = TTable (derigidify as' us' <$> r)
 
-    derigidifyU _   u@(UName _) = u
-    derigidifyU _   u@(UPrefix _) = u
+    derigidifyU _   u@(ULeaf _) = u
     derigidifyU _   u@(UFactor _) = u
     derigidifyU us' (UMul u1 u2) = UMul (derigidifyU us' u1) (derigidifyU us' u2)
     derigidifyU us' (UDiv u1 u2) = UDiv (derigidifyU us' u1) (derigidifyU us' u2)
@@ -170,8 +167,7 @@ generalise t =
     rigidify (TRecord r) = TRecord (rigidify <$> r)
     rigidify (TTable r) = TTable (rigidify <$> r)
 
-    rigidifyU u@(UName _) = u
-    rigidifyU u@(UPrefix _) = u
+    rigidifyU u@(ULeaf _) = u
     rigidifyU u@(UFactor _) = u
     rigidifyU (UMul u1 u2) = UMul (rigidifyU u1) (rigidifyU u2)
     rigidifyU (UDiv u1 u2) = UDiv (rigidifyU u1) (rigidifyU u2)

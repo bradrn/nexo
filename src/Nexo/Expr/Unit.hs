@@ -17,6 +17,7 @@ import Data.Functor.Foldable (cata)
 import qualified Data.Map.Strict as Map
 
 import Nexo.Expr.Type
+import Data.Functor ((<&>))
 
 -- | If the first unit can be converted to the second unit, returns
 -- the conversion factor from the second to the first; else returns
@@ -47,15 +48,18 @@ unitToDef (f, u) =
          -> foldr (UMul . term) (UFactor f) (Map.toList u)
   where
     term :: (Either String TVar, Int) -> UnitDef
-    term (Left name, 1) = UName name
+    term (Left name, 1) = ULeaf name
     term (Right var, 1) = UVar var
-    term (Left name, n) = UExp (UName name) n
+    term (Left name, n) = UExp (ULeaf name) n
     term (Right var, n) = UExp (UVar var) n
 
 simplify :: UnitDef -> Maybe Unit
 simplify = fmap (second $ Map.filter (/=0)) . cata \case
-    UNameF n -> expandName n
-    UPrefixF p -> (, Map.empty) <$> lookupPrefix p
+    ULeafF l -> case expandName l of
+        Just x -> Just x
+        Nothing -> case lookupPrefix l of
+            Just (l', f) -> expandName l' <&> \(g, v) -> (f*g, v)
+            Nothing -> Nothing
     UFactorF f -> Just (f, Map.empty)
     UMulF u v -> liftA2 mul u v
     UDivF u v -> liftA2 div' u v
@@ -97,26 +101,26 @@ expandName "mi"  = Just (1609.344, Map.singleton (Left "m") 1)
 expandName "lb"  = Just (453.59237, Map.singleton (Left "g") 1)
 expandName _     = Nothing
 
-lookupPrefix :: String -> Maybe Double
-lookupPrefix "Y" = Just 1000000000000000000000000
-lookupPrefix "Z" = Just 1000000000000000000000
-lookupPrefix "E" = Just 1000000000000000000
-lookupPrefix "P" = Just 1000000000000000
-lookupPrefix "T" = Just 1000000000000
-lookupPrefix "G" = Just 1000000000
-lookupPrefix "M" = Just 1000000
-lookupPrefix "k" = Just 1000
-lookupPrefix "h" = Just 100
-lookupPrefix "da"= Just 10
-lookupPrefix "d" = Just 0.1
-lookupPrefix "c" = Just 0.01
-lookupPrefix "m" = Just 0.001
-lookupPrefix "μ" = Just 0.000001
-lookupPrefix "u" = Just 0.000001
-lookupPrefix "n" = Just 0.000000001
-lookupPrefix "p" = Just 0.000000000001
-lookupPrefix "f" = Just 0.000000000000001
-lookupPrefix "a" = Just 0.000000000000000001
-lookupPrefix "z" = Just 0.000000000000000000001
-lookupPrefix "y" = Just 0.000000000000000000000001
+lookupPrefix :: String -> Maybe (String, Double)
+lookupPrefix ('Y':s) = Just (s, 1000000000000000000000000)
+lookupPrefix ('Z':s) = Just (s, 1000000000000000000000)
+lookupPrefix ('E':s) = Just (s, 1000000000000000000)
+lookupPrefix ('P':s) = Just (s, 1000000000000000)
+lookupPrefix ('T':s) = Just (s, 1000000000000)
+lookupPrefix ('G':s) = Just (s, 1000000000)
+lookupPrefix ('M':s) = Just (s, 1000000)
+lookupPrefix ('k':s) = Just (s, 1000)
+lookupPrefix ('h':s) = Just (s, 100)
+lookupPrefix ('d':'a':s) = Just (s, 10)
+lookupPrefix ('d':s) = Just (s, 0.1)
+lookupPrefix ('c':s) = Just (s, 0.01)
+lookupPrefix ('m':s) = Just (s, 0.001)
+lookupPrefix ('μ':s) = Just (s, 0.000001)
+lookupPrefix ('u':s) = Just (s, 0.000001)
+lookupPrefix ('n':s) = Just (s, 0.000000001)
+lookupPrefix ('p':s) = Just (s, 0.000000000001)
+lookupPrefix ('f':s) = Just (s, 0.000000000000001)
+lookupPrefix ('a':s) = Just (s, 0.000000000000000001)
+lookupPrefix ('z':s) = Just (s, 0.000000000000000000001)
+lookupPrefix ('y':s) = Just (s, 0.000000000000000000000001)
 lookupPrefix _   = Nothing

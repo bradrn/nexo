@@ -40,8 +40,7 @@ renderStep (XTApp s t) = "(" ++ s ++ ") : " ++ renderType t
 renderStep XNull = "Null"
 
 renderUnit :: UnitDef -> String
-renderUnit (UName s) = s
-renderUnit (UPrefix s) = s
+renderUnit (ULeaf s) = s
 renderUnit (UFactor x) = show x
 renderUnit (UMul u1 u2) = renderUnit u1 ++ ' ' : renderUnit u2
 renderUnit (UDiv u1 u2) = renderUnit u1 ++ '/' : renderUnit u2

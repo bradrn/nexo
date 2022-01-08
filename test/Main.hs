@@ -136,8 +136,8 @@ functions = testGroup "Functions"
         testEvalExpr "Let(x = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "Let(x : Num = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "Let(x : Bool = 1, x)" @?= Nothing
-        testEvalExpr "Let(x : Num<m> = 1 km, x)" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1000)
-        testEvalExpr "Let(x : Num<m> = 1 km, x + 1 m)" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1001)
+        testEvalExpr "Let(x : Num<m> = 1 km, x)" @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1000)
+        testEvalExpr "Let(x : Num<m> = 1 km, x + 1 m)" @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1001)
     , testCase "Lambdas" $ do
         fmap fst (testEvalExpr "a -> a") @?= Just (Forall ["a"] [] $ TFun [TVarR "a"] $ TVarR "a")
         fmap fst (testEvalExpr "(a,b) -> a") @?= Just (Forall ["a","b"] [] $ TFun [TVarR "a",TVarR "b"] $ TVarR "a")
@@ -149,27 +149,27 @@ functions = testGroup "Functions"
 units :: TestTree
 units = testGroup "Units"
     [ testCase "Unit application" $ do
-        testEvalExpr "1 m"       @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1)
-        testEvalExpr "1 km"      @?= Just (Forall [] [] $ TNum (UMul (UPrefix "k") (UName "m")), VNum 1)
-        testEvalExpr "1 m^-1"    @?= Just (Forall [] [] $ TNum (UExp (UName "m") (-1)), VNum 1)
-        testEvalExpr "[1,2,3] s" @?= Just (Forall [] [] $ TList (TNum (UName "s")), VList (VNum <$> [1,2,3]))
+        testEvalExpr "1 m"       @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1)
+        testEvalExpr "1 km"      @?= Just (Forall [] [] $ TNum (ULeaf "km"), VNum 1)
+        testEvalExpr "1 m^-1"    @?= Just (Forall [] [] $ TNum (UExp (ULeaf "m") (-1)), VNum 1)
+        testEvalExpr "[1,2,3] s" @?= Just (Forall [] [] $ TList (TNum (ULeaf "s")), VList (VNum <$> [1,2,3]))
     , testCase "Unit computation" $ do
-        testEvalExpr "(1 km) : Num<m>" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 1000)
+        testEvalExpr "(1 km) : Num<m>" @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1000)
         testEvalExpr "1 km : Num<s>" @?= Nothing
-        testEvalExpr "(1 m^-1) : Num<km^-1>" @?= Just (Forall [] [] (TNum (UExp (UMul (UPrefix "k") (UName "m")) (-1))),VNum 1000)
-        testEvalExpr "1 m + 2 m" @?= Just (Forall [] [] $ TNum (UName "m"), VNum 3)
-        testEvalExpr "1 km + 2 m" @?= Just (Forall [] [] $ TNum (UMul (UName "m") (UFactor 1000)), VNum 1.002)
-        testEvalExpr "1 s + 1 h" @?= Just (Forall [] [] $ TNum (UName "s"), VNum 3601)
+        testEvalExpr "(1 m^-1) : Num<km^-1>" @?= Just (Forall [] [] (TNum (UExp (ULeaf "km") (-1))),VNum 1000)
+        testEvalExpr "1 m + 2 m" @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 3)
+        testEvalExpr "1 km + 2 m" @?= Just (Forall [] [] $ TNum (UMul (ULeaf "m") (UFactor 1000)), VNum 1.002)
+        testEvalExpr "1 s + 1 h" @?= Just (Forall [] [] $ TNum (ULeaf "s"), VNum 3601)
         testEvalExpr "1 m + 2 s" @?= Nothing
-        testEvalExpr "1 m * 2 s" @?= Just (Forall [] [] $ TNum (UMul (UName "m") (UName "s")), VNum 2)
-        testEvalExpr "[1,2,3] m + [4,5,6] km" @?= Just (Forall [] [] (TList (TNum (UName "m"))),VList [VNum 4001,VNum 5002,VNum 6003])
-        testEvalExpr "[1 m, 2 km]" @?= Just (Forall [] [] (TList (TNum (UName "m"))),VList [VNum 1,VNum 2000])
+        testEvalExpr "1 m * 2 s" @?= Just (Forall [] [] $ TNum (UMul (ULeaf "m") (ULeaf "s")), VNum 2)
+        testEvalExpr "[1,2,3] m + [4,5,6] km" @?= Just (Forall [] [] (TList (TNum (ULeaf "m"))),VList [VNum 4001,VNum 5002,VNum 6003])
+        testEvalExpr "[1 m, 2 km]" @?= Just (Forall [] [] (TList (TNum (ULeaf "m"))),VList [VNum 1,VNum 2000])
         fst <$> testEvalExpr "x -> (x+1)" @?= Just (Forall [] [] (TFun [TNum Uno] (TNum Uno)))
-        fst <$> testEvalExpr "x -> (x+1m)" @?= Just (Forall [] [] (TFun [TNum (UName "m")] (TNum (UName "m"))))
+        fst <$> testEvalExpr "x -> (x+1m)" @?= Just (Forall [] [] (TFun [TNum (ULeaf "m")] (TNum (ULeaf "m"))))
         testEvalExpr "Table(rec (x: [1] m, y: (1 km + x)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList
-                  [ ("x", TNum (UName "m"))
-                  , ("y", TNum (UMul (UName "m") (UFactor 1000)))
+                  [ ("x", TNum (ULeaf "m"))
+                  , ("y", TNum (UMul (ULeaf "m") (UFactor 1000)))
                   ]
             , VTable $ Map.fromList [("x",[VNum 1]), ("y",[VNum 1.001])]
             )
@@ -281,8 +281,8 @@ genType = generalise <$> go
 
 genUnitDef :: MonadGen m => m UnitDef
 genUnitDef = Gen.recursive Gen.choice
-    [ UName <$> genIdentifier
-    , UPrefix <$> Gen.element prefixes
+    [ ULeaf <$> genIdentifier
+    , ((ULeaf .) . (++)) <$> Gen.element prefixes <*> genIdentifier
     , UFactor <$> Gen.double (Range.exponentialFloat 1e-15 1e20)
     , UVarR <$> genIdentifier
     ]

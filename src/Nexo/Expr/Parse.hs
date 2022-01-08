@@ -69,19 +69,9 @@ pUnit = do
         <|> UMul f <$> pUnit
         <|> pure f
   where
-    factored =
-        try (mkPrefix <$> pPrefix <*> pIdentifier)
-        <|> UName <$> pIdentifier
+    factored = ULeaf <$> pIdentifier
         <|> UFactor <$> L.decimal
         <|> paren pUnit
-
-    mkPrefix p u = UMul (UPrefix p) (UName u)
-
-    pPrefix :: Parser String
-    pPrefix = choice $ symbol <$>
-        ["Y","Z","E","P","T","G","M","k","h","da","d"
-        ,"c","m","μ","u","n","p","f","a","z","y"   
-        ]
 
 pUnitType :: Parser UnitDef
 pUnitType =
