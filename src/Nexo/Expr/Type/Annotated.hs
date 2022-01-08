@@ -8,6 +8,7 @@ module Nexo.Expr.Type.Annotated where
 import Data.Deriving (deriveShow1)
 import Data.Fix (Fix)
 import Data.Functor.Foldable (hoist)
+import Data.List (intercalate)
 import Text.Megaparsec.Pos (SourcePos(..), unPos)
 
 import Nexo.Expr.Type
@@ -27,8 +28,8 @@ extractSpan
         let line = lines str !! (l1-1)
         in take (c2-c1) $ drop (c1-1) line
     | otherwise =
-        let (line:rest) = take (l2-l1) $ drop (l1-1) $ lines str
-        in unlines $ drop (c1-1) line : init rest ++ [take (c2-1) $ last rest]
+        let (line:rest) = take (l2-l1+1) $ drop (l1-1) $ lines str
+        in intercalate "\n" $ drop (c1-1) line : init rest ++ [take (c2-1) $ last rest]
 
 data ExprLocF r = ExprLocF
     { span :: SourceSpan
