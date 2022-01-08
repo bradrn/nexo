@@ -9,7 +9,7 @@ module Nexo.Expr.Type where
 
 import Control.Monad.Free (Free)
 import Control.Monad.Trans.Free (FreeF(Free))
-import Data.Deriving (deriveShow1)
+import Data.Deriving (deriveShow1, deriveEq1)
 import Data.Fix (Fix(..))
 import Data.Functor.Foldable (Recursive, Corecursive, Base, hoist)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
@@ -80,7 +80,7 @@ data Literal
     = LNum Double
     | LBool Bool
     | LText String
-    deriving (Show)
+    deriving (Show, Eq)
 
 -- | Operators
 data Op
@@ -94,10 +94,10 @@ data Op
     | OLt       -- ^ Less Than
     | OAnd      -- ^ Logical And
     | OOr       -- ^ Logical Or
-    deriving (Show)
+    deriving (Show, Eq, Enum, Bounded)
 
 data Recursivity = Nonrecursive | Recursive
-    deriving (Show)
+    deriving (Show, Eq)
 
 data ExprF r
     = XLit Literal
@@ -115,6 +115,7 @@ data ExprF r
     | XNull
     deriving (Show, Functor)
 deriveShow1 ''ExprF
+deriveEq1 ''ExprF
 
 type Expr = Fix ExprF
 

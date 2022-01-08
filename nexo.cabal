@@ -51,4 +51,7 @@ test-suite nexo-test
                      , nexo
                      , tasty >= 1.4 && < 1.5
                      , tasty-hunit >= 0.10 && < 1.11
+                     , tasty-hedgehog >= 1.1 && < 1.2
                      , containers >= 0.6 && < 0.7
+                     , data-fix >= 0.3 && < 0.4
+                     , hedgehog >= 1.0 && < 1.1

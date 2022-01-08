@@ -48,7 +48,7 @@ data ValueState e
     = ValuePresent PType (Value e)
     | ValueError String
     | Invalidated
-    deriving (Show)
+    deriving (Show, Eq)
 
 display :: ValueState e -> String
 display (ValuePresent _ v) = render v
@@ -71,7 +71,7 @@ data Widget
     = ValueCell String
     | InputList [String]
     | Table [(String, [String])]
-    deriving (Show)
+    deriving (Show, Eq)
 
 data Cell = Cell
     { cellName :: String
@@ -79,10 +79,10 @@ data Cell = Cell
     , cellWidget :: Widget
     , cellExpr :: Expr
     , cellValue :: ValueState GlobalEnv
-    } deriving (Show)
+    } deriving (Show, Eq)
 
 newtype Sheet = Sheet { getSheet :: Map.Map Int Cell }
-    deriving (Show)
+    deriving (Show, Eq)
 
 insert :: Int -> Cell -> Sheet -> Sheet
 insert k v = Sheet . Map.insert k v . getSheet

@@ -1,13 +1,24 @@
 module Main where
 
+import Data.Bifunctor (second)
+import Data.Fix (Fix(Fix))
+import Data.Functor ((<&>))
+import Hedgehog
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.Hedgehog
 
 import qualified Data.Map.Strict as Map
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
 
+import Nexo.Core.Substitute (generalise)
 import Nexo.Expr.Type
 import Nexo.Expr.Unit
 import Nexo.Interpret
+import Nexo.Render (renderExpr, renderSheet)
+import Nexo.Sheet
+import Nexo.Sheet.Parse
 import Nexo.Test
 
 main :: IO ()
@@ -15,11 +26,14 @@ main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Tests"
-    [ literals
-    , values
-    , functions
-    , units
-    , multis
+    [ testGroup "Interpreter"
+      [ literals
+      , values
+      , functions
+      , units
+      , multis
+      ]
+    , renderer
     ]
 
 literals :: TestTree
@@ -171,3 +185,117 @@ multis = testGroup "Multiple cells"
         testEvalExprs [("test", "AddOne(1)"), ("AddOne", "n -> (n+1)")] @?=
             Just (Forall [] [] $ TNum Uno, VNum 2)
     ]
+
+renderer :: TestTree
+renderer = testGroup "Renderer"
+    [ testProperty "tripping" $ property $ do
+        s <- forAll $ Sheet . Map.fromList . zip [0..] <$> Gen.list (Range.linear 0 20) genCell
+        tripping s renderSheet parseSheet
+    ]
+
+genCell :: MonadGen m => m Cell
+genCell = do
+    name <- genIdentifier
+    type_ <- Gen.frequency
+        -- choose Nothing much more frequently than normal
+        -- since random types will probably be ill-typed
+        [ (10, pure Nothing)
+        , (1, Just <$> genType)
+        ]
+    (expr, widget) <- genWidgetWithExpr
+    pure $ Cell
+        { cellName = name
+        , cellType = type_
+        , cellWidget = widget
+        , cellExpr = expr
+        , cellValue = Invalidated
+        }
+
+genWidgetWithExpr :: MonadGen m => m (Expr, Widget)
+genWidgetWithExpr = Gen.frequency
+    [ (3, genExpr <&> \expr -> (expr, ValueCell $ renderExpr expr))
+    , (2, genTable <&> \tbl -> (mkTable Recursive tbl, Table $ second (fmap renderExpr) <$> tbl))
+    , (1, Gen.list (Range.linear 0 50) genExpr <&>
+          \l -> (Fix $ XList l, InputList $ renderExpr <$> l))
+    ]
+
+-- NB. these Exprs do not in general typecheck!
+genExpr :: MonadGen m => m Expr
+genExpr = Gen.recursive Gen.choice
+    [ Fix . XLit <$> genLiteral
+    , Fix . XVar <$> genIdentifier
+    , pure $ Fix XNull
+    ]
+    [ Fix . XList <$> Gen.list (Range.linear 0 50) genExpr
+    , mkTable
+        <$> Gen.element [Nonrecursive, Recursive]
+        <*> genTable
+    , Gen.subterm genExpr $ Fix . XTable
+    , do
+        i <- genIdentifier
+        t <- Gen.maybe genType 
+        Gen.subterm2 genExpr genExpr $ (Fix .) . XLet i t
+    , Gen.list (Range.linear 0 10) genIdentifier >>=
+        \is -> Gen.subterm genExpr (Fix . XLam is)
+    , genIdentifier >>= \i -> Gen.subterm genExpr (Fix . flip XField i)
+    , do
+        o <- Gen.element [minBound..maxBound]
+        Gen.subterm2 genExpr genExpr (\x y -> Fix $ XOp o x y)
+    , genUnitDef >>= \u -> Gen.subterm genExpr (Fix . flip XUnit u)
+    , genType >>= \t -> Gen.subterm genExpr (Fix . flip XTApp t)
+    ]
+
+genLiteral :: MonadGen m => m Literal
+genLiteral = Gen.choice
+    [ LNum <$> Gen.double (Range.exponentialFloat (-1e20) 1e20)
+    , LBool <$> Gen.bool
+    , LText <$> Gen.string (Range.exponential 0 500) Gen.unicode
+    ]
+
+mkTable :: Recursivity -> [(String, [Expr])] -> Expr
+mkTable rec r = Fix $ XTable $ Fix $ XRecord rec (Fix . XList <$> Map.fromList r) (fst <$> r)
+
+genTable :: MonadGen m => m [(String, [Expr])]
+genTable = do
+    rows <- Gen.int $ Range.linear 0 100
+    m <- Gen.map (Range.linear 0 30) $ (,)
+        <$> genIdentifier
+        <*> Gen.list (Range.singleton rows) genExpr
+    Gen.shuffle $ Map.toList m
+
+genType :: MonadGen m => m PType
+genType = generalise <$> go
+  where
+    go :: MonadGen m => m Type
+    go = Gen.recursive Gen.choice
+        [ TNum <$> genUnitDef
+        , pure TBool
+        , pure TText
+        , TVarR <$> genIdentifier
+        ]
+        [ Gen.subtermM go $ \t -> flip TFun t <$> Gen.list (Range.linear 0 10) go
+        , Gen.subterm go TList
+        , fmap TRecord $ Gen.map (Range.linear 0 50) $ (,) <$> genIdentifier <*> go
+        , fmap TTable  $ Gen.map (Range.linear 0 50) $ (,) <$> genIdentifier <*> go
+        ]
+
+genUnitDef :: MonadGen m => m UnitDef
+genUnitDef = Gen.recursive Gen.choice
+    [ UName <$> genIdentifier
+    , UPrefix <$> Gen.element prefixes
+    , UFactor <$> Gen.double (Range.exponentialFloat 1e-15 1e20)
+    , UVarR <$> genIdentifier
+    ]
+    [ Gen.subterm2 genUnitDef genUnitDef UMul
+    , Gen.subterm2 genUnitDef genUnitDef UDiv
+    , Gen.int (Range.linear (-10) 10) >>= \x -> Gen.subterm genUnitDef (flip UExp x)
+    ]
+  where
+    prefixes = ["Y","Z","E","P","T","G","M","k","h","da","d","c","m","μ","u","n","p","f","a","z","y"]
+
+genIdentifier :: MonadGen m => m String
+genIdentifier = (:) <$> Gen.alpha <*> Gen.string (Range.linear 1 40)
+    (Gen.frequency
+        [ ((26*2)+10, Gen.alphaNum)
+        , (1, pure '_')
+        ])
