@@ -125,7 +125,7 @@ pLet :: Parser ExprLoc
 pLet = annotateLoc $ symbol "Let" *> paren do
     v <- pIdentifier
     vt <- optional $ symbol ":" *> pPType
-    _ <- symbol "="
+    _ <- symbol ","
     vx <- pExprInner
     _ <- symbol ","
     x <- pExprInner
