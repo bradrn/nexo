@@ -71,7 +71,8 @@ pUnit = do
         <|> pure f
   where
     factored = ULeaf <$> pIdentifier
-        <|> UFactor <$> L.decimal
+        <|> UFactor <$> lexeme (try L.float <|> L.decimal)
+        <|> UVar . Rigid <$> (char '\'' *> pIdentifier)
         <|> paren pUnit
 
 pUnitType :: Parser UnitDef
