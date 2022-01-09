@@ -121,7 +121,7 @@ functions = testGroup "Functions"
     , testCase "Ascription" $ do
         testEvalExpr "1 : Num" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "1 : Bool" @?= Nothing
-        testEvalExpr "[True,False] : List Bool" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
+        testEvalExpr "[True,False] : List(Bool)" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
         testEvalExpr "[True,False] : Bool" @?= Nothing
         testEvalExpr "(x: 1, y: True) : (x: Num, y: Bool)" @?= Just
             ( Forall [] [] $ TRecord (Map.fromList [("x", TNum Uno), ("y", TBool)])
