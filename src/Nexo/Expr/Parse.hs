@@ -131,7 +131,7 @@ pLet = symbol "Let" *> paren do
     
 
 pLam :: Parser (ExprF ExprLoc)
-pLam = XLam <$> try (args <* symbol "->") <*> pTerm
+pLam = XLam <$> try (args <* symbol "->") <*> pExprInner
   where
     args = paren (pIdentifier `sepBy` symbol ",")
         <|> (pure <$> pIdentifier)
