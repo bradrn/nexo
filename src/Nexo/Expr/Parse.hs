@@ -114,8 +114,8 @@ pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
     pString :: Parser String
     pString = char '"' *> (L.charLiteral `manyTill` char '"')
 
-pLet :: Parser ExprLoc
-pLet = annotateLoc $ symbol "Let" *> paren do
+pLet :: Parser (ExprF ExprLoc)
+pLet = symbol "Let" *> paren do
     v <- pIdentifier
     vt <- optional $ symbol ":" *> pPType
     _ <- symbol ","
@@ -125,24 +125,24 @@ pLet = annotateLoc $ symbol "Let" *> paren do
     pure $ XLet v vt vx x
     
 
-pLam :: Parser ExprLoc
-pLam = annotateLoc $ XLam <$> try (args <* symbol "->") <*> pTerm
+pLam :: Parser (ExprF ExprLoc)
+pLam = XLam <$> try (args <* symbol "->") <*> pTerm
   where
     args = paren (pIdentifier `sepBy` symbol ",")
         <|> (pure <$> pIdentifier)
 
-pTermInner :: Parser ExprLoc
+pTermInner :: Parser (ExprF ExprLoc)
 pTermInner = choice
     [ pLet
-    , annotateLoc $ XTable <$> (symbol "Table" *> paren pExprInner)
-    , annotateLoc $ XNull <$ symbol "Null"
-    , annotateLoc $ XList <$> sqparen (pExprInner `sepBy` symbol ",")
+    , XTable <$> (symbol "Table" *> paren pExprInner)
+    , XNull <$ symbol "Null"
+    , XList <$> sqparen (pExprInner `sepBy` symbol ",")
     , pLam
-    , annotateLoc $ uncurry3 XRecord <$> pRecursivity <*> try (paren (pOrderedRecordSpec pTerm))
-    , try $ annotateLoc $ XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
-    , annotateLoc $ XLit <$> pLit
-    , annotateLoc $ XVar <$> pIdentifier
-    , paren pExprInner
+    , uncurry3 XRecord <$> pRecursivity <*> try (paren (pOrderedRecordSpec pTerm))
+    , try $ XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
+    , XLit <$> pLit
+    , XVar <$> pIdentifier
+    , spanExpr . unFix <$> paren pExprInner
     ]
   where
     uncurry3 :: (a -> b -> c -> x) -> (a -> (b,c) -> x)
@@ -150,7 +150,7 @@ pTermInner = choice
 
 pTerm :: Parser ExprLoc
 pTerm = do
-    r@(Fix (ExprLocF SourceSpan{spanStart} _)) <- pTermInner
+    r@(Fix (ExprLocF SourceSpan{spanStart} _)) <- annotateLoc pTermInner
     choice
         [ annotateLoc' (withBeginning spanStart) $ XField r <$> (symbol "." *> pIdentifier)
         , annotateLoc' (withBeginning spanStart) $ XTApp r <$> (symbol ":" *> pPType)
