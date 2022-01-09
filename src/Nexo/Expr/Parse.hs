@@ -64,12 +64,16 @@ pRecursivity = (Recursive <$ symbol "rec") <|> pure Nonrecursive
 
 pUnit :: Parser UnitDef
 pUnit = do
-    f <- factored
+    f <- withExp
     UDiv f <$> (symbol "/" *> pUnit)
-        <|> UExp f <$> (symbol "^" *> L.signed sc L.decimal)
         <|> UMul f <$> pUnit
         <|> pure f
   where
+    withExp = do
+        f <- factored
+        UExp f <$> (symbol "^" *> lexeme (L.signed sc L.decimal))
+            <|> pure f
+      
     factored = ULeaf <$> pIdentifier
         <|> UFactor <$> lexeme (try L.float <|> L.decimal)
         <|> UVar . Rigid <$> (char '\'' *> pIdentifier)
