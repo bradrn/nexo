@@ -32,7 +32,7 @@ renderStep (XLet k t' v x) = case t' of
     Just t  -> "Let(" ++ k ++ " : " ++ renderType t ++ ", " ++ v ++ ", " ++ x ++ ")"
     Nothing -> "Let(" ++ k ++                          ", " ++ v ++ ", " ++ x ++ ")"
 renderStep (XLam vs x) = "(" ++ intercalate ", " vs ++ ") -> " ++ x
-renderStep (XField s str) = s ++ "." ++ str
+renderStep (XField s str) = '(' : s ++ ")." ++ str
 renderStep (XFun s ss) = s ++ "(" ++ intercalate ", " ss ++ ")"
 renderStep (XOp op x1 x2) = '(' : x1 ++ ") " ++ renderOp op ++ " (" ++ x2 ++ ")"
 renderStep (XUnit s u) = "(" ++ s ++ ") " ++ renderUnit u
