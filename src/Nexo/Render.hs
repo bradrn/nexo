@@ -69,7 +69,7 @@ renderType (Forall _ts _us t) = go t
     go (TVar (Rigid v)) = '\'' : v
     go (TVar (Undetermined v)) = '\'' : v
     go (TFun vs x) = "(" ++ intercalate ", " (go <$> vs) ++ ") -> " ++ go x
-    go (TList a) = '[' : go a ++ "]"
+    go (TList a) = "List(" ++ go a ++ ")"
     go (TRecord rec) = '(' : intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ go v]) rec) ++ ")"
     go (TTable rec) = "Table(" ++ intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ go v]) rec) ++ ")"
 
