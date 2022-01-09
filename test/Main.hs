@@ -133,11 +133,11 @@ functions = testGroup "Functions"
         fst <$> testEvalExpr "((x,y) -> (x+y)) : (Num<'u>, Num<'u>) -> Num<'u>" @?=
             Just (Forall [] ["u"] $ TFun [TNum (UVarR "u"), TNum (UVarR "u")] (TNum (UVarR "u")))
     , testCase "Let" $ do
-        testEvalExpr "Let(x = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
-        testEvalExpr "Let(x : Num = 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
-        testEvalExpr "Let(x : Bool = 1, x)" @?= Nothing
-        testEvalExpr "Let(x : Num<m> = 1 km, x)" @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1000)
-        testEvalExpr "Let(x : Num<m> = 1 km, x + 1 m)" @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1001)
+        testEvalExpr "Let(x, 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "Let(x : Num, 1, x)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
+        testEvalExpr "Let(x : Bool, 1, x)" @?= Nothing
+        testEvalExpr "Let(x : Num<m>, 1 km, x)" @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1000)
+        testEvalExpr "Let(x : Num<m>, 1 km, x + 1 m)" @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1001)
     , testCase "Lambdas" $ do
         fmap fst (testEvalExpr "a -> a") @?= Just (Forall ["a"] [] $ TFun [TVarR "a"] $ TVarR "a")
         fmap fst (testEvalExpr "(a,b) -> a") @?= Just (Forall ["a","b"] [] $ TFun [TVarR "a",TVarR "b"] $ TVarR "a")
