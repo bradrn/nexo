@@ -89,7 +89,7 @@ pType = do
         <|> try pNoArgFun
         <|> try pMultiArgFun
         <|> TRecord <$> paren (pRecordSpec pType)
-        <|> TTable <$> paren (pRecordSpec pType)
+        <|> TTable <$> (symbol "Table" *> paren (pRecordSpec pType))
         <|> TList <$> (symbol "List" *> pType)
         <|> TVar . Rigid <$> (char '\'' *> pIdentifier)
     optional (symbol "->" *> pType) >>= pure . \case
