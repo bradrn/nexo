@@ -15,12 +15,12 @@ import Nexo.Sheet
 
 renderStep :: ExprF String -> String
 renderStep (XLit lit) = renderLit lit
-renderStep (XList ss) = '[' : concatMultilineList ss ++ "]"
+renderStep (XList ss) = '[' : intercalate ", " ss ++ "]"
 renderStep (XRecord r rec ss) =
     let r' = case r of
             Recursive -> "rec"
             Nonrecursive -> ""
-    in r' ++ '(' : concatMultilineList (pickElFromMap rec <$> ss) ++ ")"
+    in r' ++ '(' : intercalate ", " (pickElFromMap rec <$> ss) ++ ")"
   where
     pickElFromMap :: Map.Map String String -> String -> String
     pickElFromMap m k =
@@ -72,9 +72,6 @@ renderType (Forall _ts _us t) = go t
     go (TList a) = "List(" ++ go a ++ ")"
     go (TRecord rec) = '(' : intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ go v]) rec) ++ ")"
     go (TTable rec) = "Table(" ++ intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ go v]) rec) ++ ")"
-
-concatMultilineList :: [String] -> String
-concatMultilineList = intercalate "," . fmap ("\n    "++)
 
 renderLit :: Literal -> String
 renderLit (LNum x) = show x
