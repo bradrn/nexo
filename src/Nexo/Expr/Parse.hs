@@ -155,7 +155,7 @@ pTerm = do
     choice
         [ annotateLoc' (withBeginning spanStart) $ XField r <$> (symbol "." *> pIdentifier)
         , annotateLoc' (withBeginning spanStart) $ XTApp r <$> (symbol ":" *> pPType)
-        , annotateLoc' (withBeginning spanStart) $ XUnit r <$> pUnit
+        , annotateLoc' (withBeginning spanStart) $ XUnit r <$> try pUnit
         , pure r
         ]
   where
