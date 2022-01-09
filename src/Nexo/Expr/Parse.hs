@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE LambdaCase     #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Nexo.Expr.Parse
        ( parseMaybe
@@ -11,7 +12,7 @@ module Nexo.Expr.Parse
 
 import Data.Fix (Fix(..))
 import Data.Void ( Void )
-import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional, eof, sepBy1, getSourcePos )
+import Text.Megaparsec ( choice, oneOf, many, Parsec, parseMaybe, between, sepBy, try, manyTill, (<|>), empty, optional, eof, sepBy1, getSourcePos, SourcePos )
 import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )
 
 import qualified Data.Map.Strict as Map
@@ -84,6 +85,7 @@ pType = do
     t1 <- TNum <$> (symbol "Num" *> pUnitType)
         <|> TBool <$ symbol "Bool"
         <|> TText <$ symbol "Text"
+        <|> try pNoArgFun
         <|> try pMultiArgFun
         <|> TRecord <$> paren (pRecordSpec pType)
         <|> TTable <$> paren (pRecordSpec pType)
@@ -97,6 +99,7 @@ pType = do
         <$> paren (pType `sepBy1` symbol ",")
         <* symbol "->"
         <*> pType
+    pNoArgFun = TFun [] <$ symbol "(" <* symbol ")" <* symbol "->" <*> pType
 
 pPType :: Parser PType
 pPType = generalise <$> pType
@@ -123,35 +126,41 @@ pLet = annotateLoc $ symbol "Let" *> paren do
     
 
 pLam :: Parser ExprLoc
-pLam = annotateLoc $ XLam <$> args <* symbol "->" <*> pTerm
+pLam = annotateLoc $ XLam <$> try (args <* symbol "->") <*> pTerm
   where
     args = paren (pIdentifier `sepBy` symbol ",")
         <|> (pure <$> pIdentifier)
 
-pTerm :: Parser ExprLoc
-pTerm = wrap $ choice
-    [ try $ annotateLoc $ uncurry3 XRecord <$> pRecursivity <*> paren (pOrderedRecordSpec pTerm)
-    , try $ annotateLoc $ XTable <$> (symbol "Table" *> paren pExprInner)
-    , pLet
-    , try $ annotateLoc $ XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
-    , try pLam
-    , paren pExprInner
-    , annotateLoc $ XLit <$> pLit
+pTermInner :: Parser ExprLoc
+pTermInner = choice
+    [ pLet
+    , annotateLoc $ XTable <$> (symbol "Table" *> paren pExprInner)
     , annotateLoc $ XNull <$ symbol "Null"
-    , annotateLoc $ XVar <$> pIdentifier
     , annotateLoc $ XList <$> sqparen (pExprInner `sepBy` symbol ",")
+    , pLam
+    , annotateLoc $ uncurry3 XRecord <$> pRecursivity <*> try (paren (pOrderedRecordSpec pTerm))
+    , try $ annotateLoc $ XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
+    , annotateLoc $ XLit <$> pLit
+    , annotateLoc $ XVar <$> pIdentifier
+    , paren pExprInner
     ]
   where
     uncurry3 :: (a -> b -> c -> x) -> (a -> (b,c) -> x)
     uncurry3 f = \a (b,c) -> f a b c
 
-    wrap :: Parser ExprLoc -> Parser ExprLoc
-    wrap p = do
-        r <- p
-        annotateLoc (XField r <$> (symbol "." *> pIdentifier))
-            <|> annotateLoc (XTApp r <$> (symbol ":" *> pPType))
-            <|> annotateLoc (XUnit r <$> pUnit)
-            <|> pure r
+pTerm :: Parser ExprLoc
+pTerm = do
+    r@(Fix (ExprLocF SourceSpan{spanStart} _)) <- pTermInner
+    choice
+        [ annotateLoc' (withBeginning spanStart) $ XField r <$> (symbol "." *> pIdentifier)
+        , annotateLoc' (withBeginning spanStart) $ XTApp r <$> (symbol ":" *> pPType)
+        , annotateLoc' (withBeginning spanStart) $ XUnit r <$> pUnit
+        , pure r
+        ]
+  where
+    withBeginning :: SourcePos -> SourceSpan -> ExprF ExprLoc -> ExprLoc
+    withBeginning spanStart SourceSpan{spanEnd} =
+        Fix . ExprLocF SourceSpan{spanStart, spanEnd}
 
 pExprInner :: Parser ExprLoc
 pExprInner = prec4
