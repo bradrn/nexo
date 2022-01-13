@@ -45,10 +45,12 @@ mkDef s (Fix (ExprLocF _ (XFun f [Fix (ExprLocF _ var), Fix xloc]))) =
             _ -> Nothing
         "DefTable" -> case xloc of
             ExprLocF _ (XTable (Fix (ExprLocF _ (XRecord Recursive r order)))) ->
-                let raw :: Maybe [(String, [String])]
+                let raw :: Maybe [(String, Either String [String])]
                     raw = for order $ \k -> case Map.lookup k r of
                         Just (Fix (ExprLocF _ (XList xs))) -> Just
-                            (k, xs <&> \(Fix (ExprLocF xspan _)) -> extractSpan xspan s)
+                            (k, Right $ xs <&> \(Fix (ExprLocF xspan _)) -> extractSpan xspan s)
+                        Just (Fix (ExprLocF xspan _)) -> Just
+                            (k, Left $ extractSpan xspan s)
                         _ -> Nothing
                 in raw <&> \raw' -> Cell
                     { cellName = name

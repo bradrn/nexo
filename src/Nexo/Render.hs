@@ -98,12 +98,16 @@ renderCell Cell{..} =
         InputList ss -> ("DefList", Free $ XList $ Pure <$> ss)
         Table ss ->
             ("DefTable"
-            , Free $ XTable $ Free $ XRecord Recursive (Free . XList . fmap Pure <$> Map.fromList ss) (fst <$> ss)
+            , Free $ XTable $ Free $ XRecord Recursive (fromFormulaOrList <$> Map.fromList ss) (fst <$> ss)
             )
 
     optionalCellType = case cellType of
         Nothing -> ""
         Just t -> ' ' : ':' : ' ' : renderType t
+
+    fromFormulaOrList :: Either String [String] -> Free ExprF String
+    fromFormulaOrList (Left f) = Pure f
+    fromFormulaOrList (Right l) = Free $ XList $ Pure <$> l
 
 renderSheet :: Sheet -> String
 renderSheet (Sheet s) = intercalate "\n" $ renderCell <$> Map.elems s

@@ -1,6 +1,6 @@
 module Main where
 
-import Data.Bifunctor (second)
+import Data.Bifunctor (second, bimap)
 import Data.Fix (Fix(Fix))
 import Data.Functor ((<&>))
 import Hedgehog
@@ -215,7 +215,11 @@ genCell = do
 genWidgetWithExpr :: MonadGen m => m (Expr, Widget)
 genWidgetWithExpr = Gen.frequency
     [ (3, genExpr <&> \expr -> (expr, ValueCell $ renderExpr expr))
-    , (2, genTable <&> \tbl -> (mkTable Recursive tbl, Table $ second (fmap renderExpr) <$> tbl))
+    , (2, genTable <&> \tbl ->
+              (mkTable Recursive tbl
+              , Table $ second (bimap renderExpr (fmap renderExpr)) <$> tbl
+              )
+      )
     , (1, Gen.list (Range.linear 0 50) genExpr <&>
           \l -> (Fix $ XList l, InputList $ renderExpr <$> l))
     ]
@@ -253,15 +257,18 @@ genLiteral = Gen.choice
     , LText <$> Gen.string (Range.exponential 0 500) Gen.unicode
     ]
 
-mkTable :: Recursivity -> [(String, [Expr])] -> Expr
-mkTable rec r = Fix $ XTable $ Fix $ XRecord rec (Fix . XList <$> Map.fromList r) (fst <$> r)
+mkTable :: Recursivity -> [(String, Either Expr [Expr])] -> Expr
+mkTable rec r = Fix $ XTable $ Fix $ XRecord rec (mkCol <$> Map.fromList r) (fst <$> r)
+  where
+    mkCol :: Either Expr [Expr] -> Expr
+    mkCol = either id (Fix . XList)
 
-genTable :: MonadGen m => m [(String, [Expr])]
+genTable :: MonadGen m => m [(String, Either Expr [Expr])]
 genTable = do
     rows <- Gen.int $ Range.linear 0 100
     m <- Gen.map (Range.linear 0 30) $ (,)
         <$> genIdentifier
-        <*> Gen.list (Range.singleton rows) genExpr
+        <*> Gen.either (Gen.filterT (/=Fix (XList [])) genExpr) (Gen.list (Range.singleton rows) genExpr)
     Gen.shuffle $ Map.toList m
 
 genType :: MonadGen m => m PType

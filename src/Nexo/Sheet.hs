@@ -70,7 +70,7 @@ type Value' = Value GlobalEnv
 data Widget
     = ValueCell String
     | InputList [String]
-    | Table [(String, [String])]
+    | Table [(String, Either String [String])]
     deriving (Show, Eq)
 
 data Cell = Cell

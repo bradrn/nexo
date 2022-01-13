@@ -69,7 +69,7 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
         Nothing -> poke successPtr cFalse >> newStablePtr (Fix XNull, ValueCell "")
         Just columns ->
             let xp  = Fix  $ XTable $ Fix  $ XRecord Recursive (Map.fromList $ zip headers columns) headers
-            in poke successPtr cTrue >> newStablePtr (xp, Table $ zip headers colss)
+            in poke successPtr cTrue >> newStablePtr (xp, Table $ zip headers $ zipWith mkColumnEither formulae colss)
   where
     ptrToMaybe :: Storable a => Ptr a -> IO (Maybe a)
     ptrToMaybe p
@@ -80,6 +80,10 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
     mkColumnExpr (Just x) _         = Just x
     mkColumnExpr _       (Just col) = Just $ Fix $ XList col
     mkColumnExpr Nothing Nothing    = Nothing
+
+    mkColumnEither :: Maybe String -> [String] -> Either String [String]
+    mkColumnEither (Just x) _ = Left x
+    mkColumnEither Nothing  x = Right x
 
 hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
 hsMaybeParseType cinput = do
