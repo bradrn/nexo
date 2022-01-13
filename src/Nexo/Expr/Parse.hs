@@ -143,7 +143,7 @@ pTermInner = choice
     , XNull <$ symbol "Null"
     , XList <$> sqparen (pExprInner `sepBy` symbol ",")
     , pLam
-    , uncurry3 XRecord <$> pRecursivity <*> try (paren (pOrderedRecordSpec pTerm))
+    , uncurry3 XRecord <$> pRecursivity <*> try (paren (pOrderedRecordSpec pExprInner))
     , try $ XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
     , XLit <$> pLit
     , XVar <$> pIdentifier
