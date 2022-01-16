@@ -4,17 +4,17 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="mainwindow.cpp" line="22"/>
+        <location filename="mainwindow.cpp" line="31"/>
         <source>&amp;Value</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="mainwindow.cpp" line="23"/>
+        <location filename="mainwindow.cpp" line="32"/>
         <source>&amp;Input List</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="mainwindow.cpp" line="24"/>
+        <location filename="mainwindow.cpp" line="33"/>
         <source>&amp;Table</source>
         <translation type="unfinished"></translation>
     </message>
@@ -22,32 +22,30 @@
 <context>
     <name>Table</name>
     <message>
-        <location filename="table.cpp" line="27"/>
+        <location filename="table.cpp" line="28"/>
         <source>Add &amp;row</source>
-        <oldsource>Insert &amp;row</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="table.cpp" line="28"/>
+        <location filename="table.cpp" line="29"/>
         <source>Add &amp;column</source>
-        <oldsource>Insert &amp;column</oldsource>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>TableModel</name>
     <message>
-        <location filename="tablemodel.cpp" line="92"/>
+        <location filename="tablemodel.cpp" line="120"/>
         <source>Header</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="tablemodel.cpp" line="94"/>
+        <location filename="tablemodel.cpp" line="122"/>
         <source>Formula</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="tablemodel.cpp" line="161"/>
+        <location filename="tablemodel.cpp" line="178"/>
         <source>Column%1</source>
         <translation type="unfinished"></translation>
     </message>

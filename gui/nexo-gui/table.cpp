@@ -1,3 +1,4 @@
+#include "hscell.h"
 #include "table.h"
 #include "tablemodel.h"
 
@@ -30,6 +31,12 @@ Table::Table(int key, HsSheet *sheet, QWidget *parent)
     connect(nameEdit, &QLineEdit::editingFinished, this, [=]() { model->setName(nameEdit->text()); });
     connect(addRowAct, &QAction::triggered, this, &Table::addRow);
     connect(addColAct, &QAction::triggered, this, &Table::addCol);
+}
+
+void Table::loadValueFrom(const HsCell &cell)
+{
+    nameEdit->setText(cell.name());
+    model->loadValueFrom(cell);
 }
 
 void Table::contextMenuEvent(QContextMenuEvent *event)

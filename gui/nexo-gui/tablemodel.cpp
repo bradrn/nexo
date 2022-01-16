@@ -1,6 +1,7 @@
 #include "tablemodel.h"
 #include "hssheet.h"
 #include "hsvalue.h"
+#include "hscell.h"
 
 #include <QLineEdit>
 
@@ -24,6 +25,33 @@ void TableModel::setName(QString name)
 {
     this->name = name;
     invalidate();
+}
+
+void TableModel::loadValueFrom(const HsCell &cell)
+{
+    emit layoutAboutToBeChanged();
+
+    int rows = cell.rows();
+    int cols = cell.cols();
+
+    headers = QStringList();
+    formulae = QVector<QString *>(cols, nullptr);
+    columns = QVector<QStringList>(cols, QStringList());
+
+    for (int col=0; col<cols; ++col)
+    {
+        headers.append("");
+        QStringList &column = columns[col];
+        for (int row=0; row<rows; ++row)
+        {
+            if (row>=2) column.append("");
+            doSetData(createIndex(row, col), cell.exprAt(row, col));
+        }
+    }
+
+    requery();
+    // no need to change persistent indices, I think
+    emit layoutChanged();
 }
 
 int TableModel::rowCount(const QModelIndex &parent) const
@@ -112,18 +140,7 @@ bool TableModel::setData(const QModelIndex &index, const QVariant &value, int ro
             index.column() < headers.count() &&
             index.row() < columns[0].count()+prefaceRows)
     {
-        if (index.row() == 0)
-            headers.replace(index.column(), value.toString());
-        else if (index.row() == 1)
-        {
-            QString valueStr = value.toString();
-            if (valueStr.isEmpty())
-                formulae.replace(index.column(), nullptr);
-            else
-                formulae.replace(index.column(), new QString(valueStr));
-        }
-        else
-            columns[index.column()].replace(index.row()-prefaceRows, value.toString());
+        doSetData(index, value);
 
         invalidate();
         emit dataChanged(index, index, {role});
@@ -192,4 +209,20 @@ void TableModel::requery()
         // assume this can only be a table, don't need to check type
         values = value->toTable();
     }
+}
+
+void TableModel::doSetData(const QModelIndex &index, const QVariant &value)
+{
+    if (index.row() == 0)
+        headers.replace(index.column(), value.toString());
+    else if (index.row() == 1)
+    {
+        QString valueStr = value.toString();
+        if (valueStr.isEmpty())
+            formulae.replace(index.column(), nullptr);
+        else
+            formulae.replace(index.column(), new QString(valueStr));
+    }
+    else
+        columns[index.column()].replace(index.row()-prefaceRows, value.toString());
 }

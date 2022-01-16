@@ -1,4 +1,5 @@
 #include "Interop_stub.h"
+#include "hscell.h"
 #include "hssheet.h"
 #include "hsvalue.h"
 
@@ -15,8 +16,31 @@ HsSheet::~HsSheet()
     hs_free_stable_ptr(hsSheet);
 }
 
+std::optional<HsSheet *> HsSheet::parse(QString input)
+{
+    bool *parseSuccess = new bool();
+    HsStablePtr s = hsParseSheet(input.toUtf8().data(), parseSuccess);
+
+    if (!*parseSuccess)
+    {
+        hs_free_stable_ptr(s);
+        delete parseSuccess;
+        return {};
+    }
+
+    delete parseSuccess;
+    return new HsSheet(s);
+}
+
+QString HsSheet::render()
+{
+    return QString::fromUtf8(static_cast<char *>(hsRenderSheet(hsSheet)));
+}
+
 void HsSheet::insertCell(int key, QString name, QString type, QString expr)
 {
+    if (disallowInserts) return;
+
     bool *parseSuccess = new bool();
     HsStablePtr pexpr = hsParseExpr(expr.toUtf8().data(), parseSuccess);
     if (!*parseSuccess)
@@ -35,12 +59,13 @@ void HsSheet::insertCell(int key, QString name, QString type, QString expr)
     hs_free_stable_ptr(pexpr);
     delete parseSuccess;
 
-    hsEvalSheet(hsSheet);
-    emit reevaluated();
+    reevaluate();
 }
 
 void HsSheet::insertLiteralList(int key, QString name, QString type, QStringList lits)
 {
+    if (disallowInserts) return;
+
     int length = lits.length();
     char **clist = new char*[length];
     for (int i=0; i<length; i++)
@@ -74,8 +99,7 @@ void HsSheet::insertLiteralList(int key, QString name, QString type, QStringList
         delete clist[i];
     delete[] clist;
 
-    hsEvalSheet(hsSheet);
-    emit reevaluated();
+    reevaluate();
 }
 
 void HsSheet::insertTable(
@@ -85,6 +109,8 @@ void HsSheet::insertTable(
         , QVector<QString *> formulae
         , QVector<QStringList> columns)
 {
+    if (disallowInserts) return;
+
     int length = headers.length();
 
     char **cheaders = new char*[length];
@@ -127,8 +153,7 @@ void HsSheet::insertTable(
     {
         HsStablePtr cell = hsMkCell(name.toUtf8().data(), hsNothing(), pexpr);
         hsInsert(key, cell, hsSheet);
-        hsEvalSheet(hsSheet);
-        emit reevaluated();
+        reevaluate();
     }
 
 free:
@@ -149,6 +174,16 @@ free:
     delete[] collens;
 }
 
+void HsSheet::disableInserts()
+{
+    disallowInserts = true;
+}
+
+void HsSheet::enableInserts()
+{
+    disallowInserts = false;
+}
+
 std::variant<std::monostate, QString, HsValue> HsSheet::queryCell(int key)
 {
     std::variant<std::monostate, QString, HsValue> retval {};
@@ -166,4 +201,37 @@ cleanup:
     hs_free_stable_ptr(value);
     delete qSuccess;
     return retval;
+}
+
+void HsSheet::reevaluate()
+{
+    hsEvalSheet(hsSheet);
+    emit reevaluated();
+}
+
+QHash<int, HsCell *> HsSheet::cells()
+{
+    int *len = new int;
+    int *ixs = static_cast<int *>(hsCellIndices(hsSheet, len));
+
+    QHash<int, HsCell *> cells;
+    bool *successPtr = new bool;
+    for (int i=0; i<*len; ++i)
+    {
+        int k = ixs[i];
+        HsStablePtr cell = hsQueryCell(k, hsSheet, successPtr);
+        if (*successPtr)
+            cells.insert(k, new HsCell(cell));
+    }
+
+    delete successPtr;
+    delete ixs;
+    delete len;
+
+    return cells;
+}
+
+HsSheet::HsSheet(HsStablePtr hsSheet)
+    : hsSheet(hsSheet)
+{
 }

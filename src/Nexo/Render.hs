@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Nexo.Render (renderExpr, renderPartialExpr, renderCell, renderSheet) where
+module Nexo.Render (renderType, renderExpr, renderPartialExpr, renderCell, renderSheet) where
 
 import Control.Monad.Free
 import Data.Functor.Foldable (cata)

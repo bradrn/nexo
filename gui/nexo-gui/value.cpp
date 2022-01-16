@@ -1,3 +1,4 @@
+#include "hscell.h"
 #include "hssheet.h"
 #include "hsvalue.h"
 #include "value.h"
@@ -45,6 +46,14 @@ Value::Value(int key, HsSheet *sheet, QWidget *parent)
     connect(sheet, &HsSheet::reevaluated, this, &Value::requery);
 
     invalidate();
+}
+
+void Value::loadValueFrom(const HsCell &cell)
+{
+    nameEdit->setText(cell.name());
+    typeEdit->setText(cell.type());
+    exprEdit->setText(cell.exprAt(0,0));
+    requery();
 }
 
 void Value::invalidate()

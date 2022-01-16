@@ -4,10 +4,10 @@
 
 module Interop where
 
-import Control.Monad ((<=<), zipWithM)
+import Control.Monad ((<=<), zipWithM, (>=>))
 import Data.Fix (Fix(Fix))
 import Data.IORef
-import Data.List (genericLength)
+import Data.List (genericLength, genericIndex)
 import Data.Traversable (for)
 import Foreign
 import Foreign.C hiding (newCString, peekCString) -- hide these so we don't accidentally use them
@@ -20,7 +20,9 @@ import Nexo.Expr.Parse
 import Nexo.Expr.Type
 import Nexo.Expr.Type.Annotated (delocalise)
 import Nexo.Interpret (Value(..), render)
+import Nexo.Render (renderType, renderSheet)
 import Nexo.Sheet
+import Nexo.Sheet.Parse (parseSheet)
 
 hsNewSheet :: IO (StablePtr (IORef Sheet))
 hsNewSheet = newStablePtr =<< newIORef (Sheet Map.empty)
@@ -111,6 +113,13 @@ hsEvalSheet ptr = do
     ref <- deRefStablePtr ptr
     modifyIORef' ref evalSheet
 
+hsCellIndices :: StablePtr (IORef Sheet) -> Ptr CInt -> IO (Ptr CInt)
+hsCellIndices ptr lptr = do
+    ref <- deRefStablePtr ptr
+    Sheet s <- readIORef ref
+    poke lptr $ fromIntegral $ length s
+    newArray $ fromIntegral <$> Map.keys s
+
 hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState')
 hsQuery k ptr successPtr = do
     ref <- deRefStablePtr ptr
@@ -118,6 +127,68 @@ hsQuery k ptr successPtr = do
     case Map.lookup (fromIntegral k) s of
         Nothing -> poke successPtr cFalse >> newStablePtr Invalidated
         Just cl -> poke successPtr cTrue  >> newStablePtr (cellValue cl)
+
+hsQueryCell :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr Cell)
+hsQueryCell k ptr successPtr = do
+    ref <- deRefStablePtr ptr
+    Sheet s <- readIORef ref
+    case Map.lookup (fromIntegral k) s of
+        Nothing -> poke successPtr cFalse >> newStablePtr (Cell "" Nothing (ValueCell "") (Fix XNull) Invalidated)
+        Just cl -> poke successPtr cTrue  >> newStablePtr cl
+
+hsWidgetType :: StablePtr Cell -> IO CInt
+hsWidgetType = fmap cellWidget . deRefStablePtr >=> pure . \case
+   ValueCell _ -> 0
+   InputList _ -> 1
+   Table _ -> 2
+
+hsWidgetCols :: StablePtr Cell -> IO CInt
+hsWidgetCols = fmap cellWidget . deRefStablePtr >=> pure . \case
+    Table t -> genericLength t
+    _ -> 1
+
+-- Warning: this assumes the 'Cell' is fully evaluated!
+hsWidgetRows :: StablePtr Cell -> IO CInt
+hsWidgetRows = deRefStablePtr >=> pure . \case
+    Cell{cellWidget = ValueCell _} -> 1
+    Cell{cellWidget = InputList l} -> genericLength l
+    Cell{cellWidget = Table _
+        ,cellValue = ValuePresent _ (VTable (Map.elems -> (col:_)))}
+        -> genericLength col + 2
+    Cell{cellWidget = Table _} -> 2  -- header rows
+
+hsExprAt :: CInt -> CInt -> StablePtr Cell -> IO CString
+hsExprAt row col = fmap cellWidget . deRefStablePtr >=> GHC.newCString utf8 . \case
+   ValueCell c -> c
+   InputList l -> genericIndex l row
+   Table t -> case row of
+       0 -> fst $ genericIndex t col
+       1 -> case snd $ genericIndex t col of
+           Left f -> f
+           Right _ -> ""
+       (subtract 2 -> row') -> case snd $ genericIndex t col of
+           Left _ -> ""
+           Right l -> genericIndex l row'
+
+hsCellName :: StablePtr Cell -> IO CString
+hsCellName = GHC.newCString utf8 . cellName <=< deRefStablePtr
+
+hsCellType :: StablePtr Cell -> IO CString
+hsCellType = GHC.newCString utf8 . maybe "" renderType . cellType <=< deRefStablePtr
+
+hsParseSheet :: CString -> Ptr CBool -> IO (StablePtr (IORef Sheet))
+hsParseSheet cinput successPtr = do
+    input <- GHC.peekCString utf8 cinput
+    case parseSheet input of
+        Nothing -> do
+            poke successPtr cFalse
+            hsNewSheet
+        Just s -> do
+            poke successPtr cTrue
+            newStablePtr =<< newIORef s
+
+hsRenderSheet :: StablePtr (IORef Sheet) -> IO CString
+hsRenderSheet = GHC.newCString utf8 . renderSheet <=< readIORef <=< deRefStablePtr
 
 hsDisplayError :: StablePtr ValueState' -> IO CString
 hsDisplayError ptr = deRefStablePtr ptr >>= \case
@@ -182,7 +253,17 @@ foreign export ccall hsNothing :: IO (StablePtr (Maybe a))
 foreign export ccall hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr (Expr, Widget) -> IO (StablePtr Cell)
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()
 foreign export ccall hsEvalSheet :: StablePtr (IORef Sheet) -> IO () 
+foreign export ccall hsCellIndices :: StablePtr (IORef Sheet) -> Ptr CInt -> IO (Ptr CInt)
 foreign export ccall hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState')
+foreign export ccall hsQueryCell :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr Cell)
+foreign export ccall hsWidgetType :: StablePtr Cell -> IO CInt
+foreign export ccall hsWidgetCols :: StablePtr Cell -> IO CInt
+foreign export ccall hsWidgetRows :: StablePtr Cell -> IO CInt
+foreign export ccall hsExprAt :: CInt -> CInt -> StablePtr Cell -> IO CString
+foreign export ccall hsCellName :: StablePtr Cell -> IO CString
+foreign export ccall hsCellType :: StablePtr Cell -> IO CString
+foreign export ccall hsParseSheet :: CString -> Ptr CBool -> IO (StablePtr (IORef Sheet))
+foreign export ccall hsRenderSheet :: StablePtr (IORef Sheet) -> IO CString
 foreign export ccall hsDisplayError :: StablePtr ValueState' -> IO CString
 foreign export ccall hsExtractTopLevelType :: StablePtr ValueState' -> IO CInt
 foreign export ccall hsExtractValue :: StablePtr ValueState' -> IO (StablePtr Value')

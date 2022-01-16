@@ -25,6 +25,9 @@ private slots:
     void newTable();
 
 private:
+    void openSheet();
+    void saveSheet();
+
     QMdiArea *mdiArea;
 
     int latestKey;

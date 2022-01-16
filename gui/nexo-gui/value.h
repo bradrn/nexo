@@ -3,6 +3,7 @@
 
 #include <QWidget>
 
+class HsCell;
 class HsSheet;
 class QLineEdit;
 
@@ -11,6 +12,8 @@ class Value : public QWidget
     Q_OBJECT
 public:
     explicit Value(int key, HsSheet *sheet, QWidget *parent = nullptr);
+
+    void loadValueFrom(const HsCell &cell);
 
 public slots:
     void invalidate();

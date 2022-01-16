@@ -1,3 +1,4 @@
+#include "hscell.h"
 #include "hssheet.h"
 #include "inputlist.h"
 
@@ -39,6 +40,18 @@ InputList::InputList(int key, HsSheet *sheet, QWidget *parent)
     connect(model, &QStringListModel::dataChanged, this, &InputList::invalidate);
 
     connect(add, &QPushButton::clicked, this, &InputList::addItem);
+}
+
+void InputList::loadValueFrom(const HsCell &cell)
+{
+    nameEdit->setText(cell.name());
+    typeEdit->setText(cell.type());
+
+    int rows = cell.rows();
+    QStringList exprs;
+    for (int row=0; row<rows; ++row)
+        exprs << cell.exprAt(row, 0);
+    model->setStringList(exprs);
 }
 
 void InputList::invalidate()

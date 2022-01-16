@@ -3,6 +3,7 @@
 
 #include <QAbstractTableModel>
 
+class HsCell;
 class HsValue;
 class HsSheet;
 class QLineEdit;
@@ -13,6 +14,8 @@ class TableModel : public QAbstractTableModel
 public:
     TableModel(int key, HsSheet *sheet, QObject *parent = nullptr);
     void setName(QString name);
+
+    void loadValueFrom(const HsCell &cell);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     int columnCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -37,6 +40,8 @@ private:
     QVector<QString *> formulae; // nullptr for columns lacking a formula
     QVector<QStringList> columns;
     QHash<QString, QVector<HsValue *>> values;
+
+    void doSetData(const QModelIndex &index, const QVariant &value);
 };
 
 #endif // HSTABLEMODEL_H

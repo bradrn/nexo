@@ -32,6 +32,8 @@ add_executable(nexo-gui
   value.h
   hsvalue.cpp
   hsvalue.h
+  hscell.cpp
+  hscell.h
   inputlist.cpp
   inputlist.h
   tablemodel.cpp

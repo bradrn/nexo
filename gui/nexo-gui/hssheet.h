@@ -3,8 +3,10 @@
 
 #include <HsFFI.h>
 #include <QWidget>
+#include <optional>
 #include <variant>
 
+class HsCell;
 class HsValue;
 class QString;
 
@@ -18,6 +20,11 @@ public:
     HsSheet(const HsSheet&) = delete;
     HsSheet operator=(const HsSheet&) = delete;
 
+    static std::optional<HsSheet *> parse(QString input);
+
+    QString render();
+
+    // Insert various types of cells into a sheet. Note that these trigger reevaluation.
     void insertCell(int key, QString name, QString type, QString expr);
     void insertLiteralList(int key, QString name, QString type, QStringList lits);
     void insertTable(
@@ -26,13 +33,27 @@ public:
             QStringList headers,
             QVector<QString *> formulae,
             QVector<QStringList> columns);
+
+    /* Turn all 'insertXXX' methods into noops. Useful when creating cells from
+     * pre-existing values, to make sure nothing is overwritten.
+     */
+    void disableInserts();
+    void enableInserts();
+
     std::variant<std::monostate, QString, HsValue> queryCell(int key);
+
+    void reevaluate();
+
+    QHash<int, HsCell *> cells();
 
 signals:
     void reevaluated();
 
 private:
+    HsSheet(HsStablePtr hsSheet);
+
     HsStablePtr hsSheet;
+    bool disallowInserts = false;
 };
 
 #endif // HSSHEET_H

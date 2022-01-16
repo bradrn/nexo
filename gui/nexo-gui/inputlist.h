@@ -3,6 +3,7 @@
 
 #include <QWidget>
 
+class HsCell;
 class HsSheet;
 class QLineEdit;
 class QListView;
@@ -13,6 +14,8 @@ class InputList : public QWidget
     Q_OBJECT
 public:
     explicit InputList(int key, HsSheet *sheet, QWidget *parent = nullptr);
+
+    void loadValueFrom(const HsCell &cell);
 
 public slots:
     void invalidate();

@@ -3,6 +3,7 @@
 
 #include <QWidget>
 
+class HsCell;
 class HsSheet;
 class TableModel;
 class QTableView;
@@ -13,6 +14,8 @@ class Table : public QWidget
     Q_OBJECT
 public:
     explicit Table(int key, HsSheet *sheet, QWidget *parent = nullptr);
+
+    void loadValueFrom(const HsCell &cell);
 
 protected:
     void contextMenuEvent (QContextMenuEvent *event) override;
