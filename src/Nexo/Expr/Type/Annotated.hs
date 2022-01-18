@@ -31,14 +31,15 @@ extractSpan
         let (line:rest) = take (l2-l1+1) $ drop (l1-1) $ lines str
         in intercalate "\n" $ drop (c1-1) line : init rest ++ [take (c2-1) $ last rest]
 
-data ExprLocF r = ExprLocF
+data AnnLocF t r = AnnLocF
     { span :: SourceSpan
-    , spanExpr :: ExprF r
+    , spanExpr :: t r
     } deriving (Show, Functor)
-deriveShow1 ''ExprLocF
+deriveShow1 ''AnnLocF
 
 -- TODO: use to give nicer typechecker errors also
-type ExprLoc = Fix ExprLocF
+type ASTLoc = Fix (AnnLocF ASTF)
+type ExprLoc = Fix (AnnLocF ExprF)
 
-delocalise :: ExprLoc -> Expr
+delocalise :: Functor t => Fix (AnnLocF t) -> Fix t
 delocalise = hoist spanExpr

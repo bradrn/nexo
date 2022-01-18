@@ -212,7 +212,7 @@ genCell = do
         , cellValue = Invalidated
         }
 
-genWidgetWithExpr :: MonadGen m => m (Expr, Widget)
+genWidgetWithExpr :: MonadGen m => m (AST, Widget)
 genWidgetWithExpr = Gen.frequency
     [ (3, genExpr <&> \expr -> (expr, ValueCell $ renderExpr expr))
     , (2, genTable <&> \tbl ->
@@ -221,33 +221,33 @@ genWidgetWithExpr = Gen.frequency
               )
       )
     , (1, Gen.list (Range.linear 0 50) genExpr <&>
-          \l -> (Fix $ XList l, InputList $ renderExpr <$> l))
+          \l -> (Fix $ ASTList l, InputList $ renderExpr <$> l))
     ]
 
--- NB. these Exprs do not in general typecheck!
-genExpr :: MonadGen m => m Expr
+-- NB. these ASTs do not in general typecheck!
+genExpr :: MonadGen m => m AST
 genExpr = Gen.recursive Gen.choice
-    [ Fix . XLit <$> genLiteral
-    , Fix . XVar <$> genIdentifier
-    , pure $ Fix XNull
+    [ Fix . ASTLit <$> genLiteral
+    , Fix . ASTVar <$> genIdentifier
+    , pure $ Fix ASTNull
     ]
-    [ Fix . XList <$> Gen.list (Range.linear 0 50) genExpr
+    [ Fix . ASTList <$> Gen.list (Range.linear 0 50) genExpr
     , mkTable
         <$> Gen.element [Nonrecursive, Recursive]
         <*> genTable
-    , Gen.subterm genExpr $ Fix . XTable
+    , Gen.subterm genExpr $ Fix . ASTFun "Table" . pure
     , do
         i <- genIdentifier
         t <- Gen.maybe genType 
-        Gen.subterm2 genExpr genExpr $ (Fix .) . XLet i t
+        Gen.subterm2 genExpr genExpr $ (Fix .) . ASTLet i t
     , Gen.list (Range.linear 0 10) genIdentifier >>=
-        \is -> Gen.subterm genExpr (Fix . XLam is)
-    , genIdentifier >>= \i -> Gen.subterm genExpr (Fix . flip XField i)
+        \is -> Gen.subterm genExpr (Fix . ASTLam is)
+    , genIdentifier >>= \i -> Gen.subterm genExpr (Fix . flip ASTField i)
     , do
-        o <- Gen.element [minBound..maxBound]
-        Gen.subterm2 genExpr genExpr (\x y -> Fix $ XOp o x y)
-    , genUnitDef >>= \u -> Gen.subterm genExpr (Fix . flip XUnit u)
-    , genType >>= \t -> Gen.subterm genExpr (Fix . flip XTApp t)
+        o <- Gen.element ["=","<>","+","-","*","/",">","<","&&","||"]
+        Gen.subterm2 genExpr genExpr (\x y -> Fix $ ASTOp o x y)
+    , genUnitDef >>= \u -> Gen.subterm genExpr (Fix . flip ASTUnit u)
+    , genType >>= \t -> Gen.subterm genExpr (Fix . flip ASTTApp t)
     ]
 
 genLiteral :: MonadGen m => m Literal
@@ -257,18 +257,18 @@ genLiteral = Gen.choice
     , LText <$> Gen.string (Range.exponential 0 500) Gen.unicode
     ]
 
-mkTable :: Recursivity -> [(String, Either Expr [Expr])] -> Expr
-mkTable rec r = Fix $ XTable $ Fix $ XRecord rec (mkCol <$> Map.fromList r) (fst <$> r)
+mkTable :: Recursivity -> [(String, Either AST [AST])] -> AST
+mkTable rec r = Fix $ ASTFun "Table" [Fix $ ASTRecord rec (mkCol <$> Map.fromList r) (fst <$> r)]
   where
-    mkCol :: Either Expr [Expr] -> Expr
-    mkCol = either id (Fix . XList)
+    mkCol :: Either AST [AST] -> AST
+    mkCol = either id (Fix . ASTList)
 
-genTable :: MonadGen m => m [(String, Either Expr [Expr])]
+genTable :: MonadGen m => m [(String, Either AST [AST])]
 genTable = do
     rows <- Gen.int $ Range.linear 0 100
     m <- Gen.map (Range.linear 0 30) $ (,)
         <$> genIdentifier
-        <*> Gen.either (Gen.filterT (/=Fix (XList [])) genExpr) (Gen.list (Range.singleton rows) genExpr)
+        <*> Gen.either (Gen.filterT (/=Fix (ASTList [])) genExpr) (Gen.list (Range.singleton rows) genExpr)
     Gen.shuffle $ Map.toList m
 
 genType :: MonadGen m => m PType
@@ -290,7 +290,7 @@ genType = generalise <$> go
 genUnitDef :: MonadGen m => m UnitDef
 genUnitDef = Gen.recursive Gen.choice
     [ ULeaf <$> genIdentifier
-    , ((ULeaf .) . (++)) <$> Gen.element prefixes <*> genIdentifier
+    , (ULeaf .) . (++) <$> Gen.element prefixes <*> genIdentifier
     , UFactor <$> Gen.double (Range.exponentialFloat 1e-15 1e20)
     , UVarR <$> genIdentifier
     ]

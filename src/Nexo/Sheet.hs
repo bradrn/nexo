@@ -25,7 +25,6 @@ module Nexo.Sheet
        ) where
 
 import Control.Monad.Except (runExceptT, MonadError(..), ExceptT(..))
-import Control.Monad.Free (Free)
 import Control.Monad.State.Strict
     ( gets, modify', State, StateT (..), MonadState(..) )
 import Control.Monad.Trans (lift)
@@ -36,12 +35,12 @@ import Data.Set (unions)
 
 import qualified Data.Map.Strict as Map
 
-import Nexo.Expr.Reorder
 import Nexo.Core.Substitute
 import Nexo.Core.Typecheck
 import Nexo.Expr.Type
 import Nexo.Interpret
 import Nexo.Env (MonadScoped(..), MonadEnv(..), MonadSubst(..), Scoped(..))
+import Nexo.Expr.Desugar
 import Nexo.Env.Std
 
 data ValueState e
@@ -77,7 +76,7 @@ data Cell = Cell
     { cellName :: String
     , cellType :: Maybe PType
     , cellWidget :: Widget
-    , cellExpr :: Expr
+    , cellExpr :: AST
     , cellValue :: ValueState GlobalEnv
     } deriving (Show, Eq)
 
@@ -179,7 +178,7 @@ evalSheet (Sheet s) = Sheet $
         Nothing -> pure $ ValueError "#IREF"
         -- Typecheck, evaluate, cache and return new value if invalidated
         Just c@Cell{cellType = type_, cellExpr = expr, cellValue = Invalidated} -> do
-            let expr' = reorder $ maybe expr (Fix . XTApp expr) type_
+            let expr' = desugar $ maybe expr (Fix . ASTTApp expr) type_
             r <- runExceptT $ typecheck expr'
             (v, t) <- case r of
                 Left e -> pure (ValueError e, Nothing)

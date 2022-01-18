@@ -31,8 +31,8 @@ annotateLoc' ann p = do
     end <- getSourcePos
     pure $ ann SourceSpan{spanStart=start, spanEnd=end} r
 
-annotateLoc :: Parser (ExprF ExprLoc) -> Parser ExprLoc
-annotateLoc = annotateLoc' $ (Fix .) . ExprLocF
+annotateLoc :: Parser (ASTF ASTLoc) -> Parser ASTLoc
+annotateLoc = annotateLoc' $ (Fix .) . AnnLocF
 
 sc :: Parser ()
 sc = L.space space1 empty empty
@@ -119,7 +119,7 @@ pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
     pString :: Parser String
     pString = char '"' *> (L.charLiteral `manyTill` char '"')
 
-pLet :: Parser (ExprF ExprLoc)
+pLet :: Parser (ASTF ASTLoc)
 pLet = symbol "Let" *> paren do
     v <- pIdentifier
     vt <- optional $ symbol ":" *> pPType
@@ -127,65 +127,64 @@ pLet = symbol "Let" *> paren do
     vx <- pExprInner
     _ <- symbol ","
     x <- pExprInner
-    pure $ XLet v vt vx x
+    pure $ ASTLet v vt vx x
     
 
-pLam :: Parser (ExprF ExprLoc)
-pLam = XLam <$> try (args <* symbol "->") <*> pExprInner
+pLam :: Parser (ASTF ASTLoc)
+pLam = ASTLam <$> try (args <* symbol "->") <*> pExprInner
   where
     args = paren (pIdentifier `sepBy` symbol ",")
         <|> (pure <$> pIdentifier)
 
-pTermInner :: Parser (ExprF ExprLoc)
+pTermInner :: Parser (ASTF ASTLoc)
 pTermInner = choice
     [ pLet
-    , XTable <$> (symbol "Table" *> paren pExprInner)
-    , XNull <$ symbol "Null"
-    , XList <$> sqparen (pExprInner `sepBy` symbol ",")
+    , ASTNull <$ symbol "Null"
+    , ASTList <$> sqparen (pExprInner `sepBy` symbol ",")
     , pLam
-    , uncurry3 XRecord <$> pRecursivity <*> try (paren (pOrderedRecordSpec pExprInner))
-    , try $ XFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
-    , XLit <$> pLit
-    , XVar <$> pIdentifier
+    , uncurry3 ASTRecord <$> pRecursivity <*> try (paren (pOrderedRecordSpec pExprInner))
+    , try $ ASTFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
+    , ASTLit <$> pLit
+    , ASTVar <$> pIdentifier
     , spanExpr . unFix <$> paren pExprInner
     ]
   where
     uncurry3 :: (a -> b -> c -> x) -> (a -> (b,c) -> x)
     uncurry3 f = \a (b,c) -> f a b c
 
-pTerm :: Parser ExprLoc
+pTerm :: Parser ASTLoc
 pTerm = do
-    r@(Fix (ExprLocF SourceSpan{spanStart} _)) <- annotateLoc pTermInner
+    r@(Fix (AnnLocF SourceSpan{spanStart} _)) <- annotateLoc pTermInner
     choice
-        [ annotateLoc' (withBeginning spanStart) $ XField r <$> (symbol "." *> pIdentifier)
-        , annotateLoc' (withBeginning spanStart) $ XTApp r <$> (symbol ":" *> pPType)
-        , annotateLoc' (withBeginning spanStart) $ XUnit r <$> try pUnit
+        [ annotateLoc' (withBeginning spanStart) $ ASTField r <$> (symbol "." *> pIdentifier)
+        , annotateLoc' (withBeginning spanStart) $ ASTTApp r <$> (symbol ":" *> pPType)
+        , annotateLoc' (withBeginning spanStart) $ ASTUnit r <$> try pUnit
         , pure r
         ]
   where
-    withBeginning :: SourcePos -> SourceSpan -> ExprF ExprLoc -> ExprLoc
+    withBeginning :: SourcePos -> SourceSpan -> ASTF ASTLoc -> ASTLoc
     withBeginning spanStart SourceSpan{spanEnd} =
-        Fix . ExprLocF SourceSpan{spanStart, spanEnd}
+        Fix . AnnLocF SourceSpan{spanStart, spanEnd}
 
-pExprInner :: Parser ExprLoc
+pExprInner :: Parser ASTLoc
 pExprInner = prec4
   where
-    prec4 = mkOp prec3 $ (OTimes <$ symbol "*") <|> (ODiv <$ symbol "/")
-    prec3 = mkOp prec2 $ (OPlus <$ symbol "+") <|> (OMinus <$ symbol "-")
+    prec4 = mkOp prec3 $ symbol "*" <|> symbol "/"
+    prec3 = mkOp prec2 $ symbol "+" <|> symbol "-"
     prec2 = mkOp prec1 $
-        OEq <$ symbol "="
-        <|> ONeq <$ symbol "<>"
-        <|> OGt <$ symbol ">"
-        <|> OLt <$ symbol "<"
-    prec1 = mkOp pTerm $ (OAnd <$ symbol "&&") <|> (OOr <$ symbol "||")
+        symbol "="
+        <|> symbol "<>"
+        <|> symbol ">"
+        <|> symbol "<"
+    prec1 = mkOp pTerm $ symbol "&&" <|> symbol "||"
 
-    mkOp :: Parser ExprLoc -> Parser Op -> Parser ExprLoc
+    mkOp :: Parser ASTLoc -> Parser String -> Parser ASTLoc
     mkOp p po = go
       where
         go = annotateLoc' mkExprLoc $ (,) <$> p <*> optional ((,) <$> po <*> go)
 
         mkExprLoc _     (xloc, Nothing) = xloc
-        mkExprLoc sspan (xloc1, Just (op, xloc2)) = Fix $ ExprLocF sspan $ XOp op xloc1 xloc2
+        mkExprLoc sspan (xloc1, Just (op, xloc2)) = Fix $ AnnLocF sspan $ ASTOp op xloc1 xloc2
 
-pExpr :: Parser ExprLoc
-pExpr = annotateLoc (XNull <$ eof) <|> pExprInner
+pExpr :: Parser ASTLoc
+pExpr = annotateLoc (ASTNull <$ eof) <|> pExprInner

@@ -81,40 +81,46 @@ data Literal
     | LText String
     deriving (Show, Eq)
 
--- | Operators
-data Op
-    = OPlus     -- ^ Plus
-    | OMinus    -- ^ Minus
-    | OTimes    -- ^ Times
-    | ODiv      -- ^ Division
-    | OEq       -- ^ Equals
-    | ONeq      -- ^ Not Equals
-    | OGt       -- ^ Greater Than
-    | OLt       -- ^ Less Than
-    | OAnd      -- ^ Logical And
-    | OOr       -- ^ Logical Or
-    deriving (Show, Eq, Enum, Bounded)
-
 data Recursivity = Nonrecursive | Recursive
     deriving (Show, Eq)
 
+data ASTF r
+    = ASTLit Literal
+    | ASTList [r]
+    | ASTRecord Recursivity (Map.Map String r) [String]
+    | ASTVar String
+    | ASTLet String (Maybe PType) r r
+    | ASTLam [String] r
+    | ASTField r String
+    | ASTFun String [r]
+    | ASTOp String r r
+    | ASTUnit r UnitDef
+    | ASTTApp r PType
+    | ASTNull
+    deriving (Show, Functor)
+deriveShow1 ''ASTF
+deriveEq1 ''ASTF
+
+type AST = Fix ASTF
+
+data Atom
+    = Lit Literal
+    | Var String
+    | Null
+    deriving (Show, Eq)
+
 data ExprF r
-    = XLit Literal
-    | XList [r]
+    = XAtom Atom
     | XRecord Recursivity (Map.Map String r) [String]
-    | XTable r
-    | XVar String
-    | XLet String (Maybe PType) r r
-    | XLam [String] r
-    | XField r String
-    | XFun String [r]
-    | XOp Op r r
-    | XUnit r UnitDef
-    | XTApp r PType
-    | XNull
+    | XFunApp r [r]
+    | XTypeApp r PType
+    | XUnitApp r UnitDef
     deriving (Show, Functor)
 deriveShow1 ''ExprF
 deriveEq1 ''ExprF
+
+pattern XNamedFunApp :: String -> [Fix ExprF] -> ExprF (Fix ExprF)
+pattern XNamedFunApp f args = XFunApp (Fix (XAtom (Var f))) args
 
 type Expr = Fix ExprF
 

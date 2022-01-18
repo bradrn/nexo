@@ -22,8 +22,8 @@ library
                      , Nexo.Core.Typecheck
                      , Nexo.Env
                      , Nexo.Env.Std
+                     , Nexo.Expr.Desugar
                      , Nexo.Expr.Parse
-                     , Nexo.Expr.Reorder
                      , Nexo.Expr.Type
                      , Nexo.Expr.Type.Annotated
                      , Nexo.Expr.Unit

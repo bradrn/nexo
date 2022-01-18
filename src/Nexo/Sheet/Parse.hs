@@ -16,11 +16,11 @@ import Nexo.Expr.Type.Annotated hiding (span)
 import qualified Nexo.Expr.Type.Annotated as Ann
 import Nexo.Sheet
 
-mkDef :: String -> ExprLoc -> Maybe Cell
-mkDef s (Fix (ExprLocF _ (XFun f [Fix (ExprLocF _ var), Fix xloc]))) =
+mkDef :: String -> ASTLoc -> Maybe Cell
+mkDef s (Fix (AnnLocF _ (ASTFun f [Fix (AnnLocF _ var), Fix xloc]))) =
     let varInfo = case var of
-            XVar v -> Just (v, Nothing)
-            XTApp (Fix (ExprLocF _ (XVar v))) t -> Just (v, Just t)
+            ASTVar v -> Just (v, Nothing)
+            ASTTApp (Fix (AnnLocF _ (ASTVar v))) t -> Just (v, Just t)
             _ -> Nothing
     in varInfo >>= \(name, type_) -> case f of
         "DefValue" ->
@@ -33,8 +33,8 @@ mkDef s (Fix (ExprLocF _ (XFun f [Fix (ExprLocF _ var), Fix xloc]))) =
                 , cellValue = Invalidated
                 }
         "DefList" -> case xloc of
-            ExprLocF _ (XList xs) ->
-                let texts = xs <&> \(Fix (ExprLocF xspan _)) -> extractSpan xspan s
+            AnnLocF _ (ASTList xs) ->
+                let texts = xs <&> \(Fix (AnnLocF xspan _)) -> extractSpan xspan s
                 in Just Cell
                     { cellName = name
                     , cellType = type_
@@ -44,12 +44,12 @@ mkDef s (Fix (ExprLocF _ (XFun f [Fix (ExprLocF _ var), Fix xloc]))) =
                     }
             _ -> Nothing
         "DefTable" -> case xloc of
-            ExprLocF _ (XTable (Fix (ExprLocF _ (XRecord Recursive r order)))) ->
+            AnnLocF _ (ASTFun "Table" [Fix (AnnLocF _ (ASTRecord Recursive r order))]) ->
                 let raw :: Maybe [(String, Either String [String])]
                     raw = for order $ \k -> case Map.lookup k r of
-                        Just (Fix (ExprLocF _ (XList xs))) -> Just
-                            (k, Right $ xs <&> \(Fix (ExprLocF xspan _)) -> extractSpan xspan s)
-                        Just (Fix (ExprLocF xspan _)) -> Just
+                        Just (Fix (AnnLocF _ (ASTList xs))) -> Just
+                            (k, Right $ xs <&> \(Fix (AnnLocF xspan _)) -> extractSpan xspan s)
+                        Just (Fix (AnnLocF xspan _)) -> Just
                             (k, Left $ extractSpan xspan s)
                         _ -> Nothing
                 in raw <&> \raw' -> Cell

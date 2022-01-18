@@ -24,6 +24,16 @@ stdFnTs =
     , ("InvTan"    , Forall [] []    $ TFun [TNum Uno] (TNum (ULeaf "rad")))
     , ("Root"      , Forall [] []    $ TFun [TNum Uno, TNum Uno] (TNum Uno))
     , ("Power"     , Forall [] []    $ TFun [TNum Uno, TNum Uno] (TNum Uno))
+    , ("="  , Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a"))
+    , ("<>" , Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a"))
+    , ("+"  , Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u"))
+    , ("-"  , Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u"))
+    , ("*"  , Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UMul (UVarR "u") (UVarR "v")))
+    , ("/"  , Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UDiv (UVarR "u") (UVarR "v")))
+    , (">"  , Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool)
+    , ("<"  , Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool)
+    , ("&&" , Forall [] []         $ TFun [TBool, TBool] TBool)
+    , ("||" , Forall [] []         $ TFun [TBool, TBool] TBool)
     ]
 
 stdFnVals :: [(String, Value e)]
@@ -51,7 +61,18 @@ stdFnVals = fmap (second $ VPrimClosure . PrimClosure)
           [VRecord r, VText f] | Just v <- Map.lookup f r -> v
           [VTable  r, VText f] | Just v <- Map.lookup f r -> VList v
           _ -> error "GetField(,): bug in typechecker"
-      ) ]
+      )
+    , ("+" , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 + i2)
+    , ("-" , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 - i2)
+    , ("*" , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 * i2)
+    , ("/" , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 / i2)
+    , ("=" , handleNull $ \[v1     , v2     ] -> VBool $ v1 == v2)
+    , ("<>", handleNull $ \[v1     , v2     ] -> VBool $ v1 /= v2)
+    , (">" , handleNull $ \[VNum i1, VNum i2] -> VBool $ i1 > i2)
+    , ("<" , handleNull $ \[VNum i1, VNum i2] -> VBool $ i1 < i2)
+    , ("&&", handleNull $ \[VBool p, VBool q] -> VBool $ p && q)
+    , ("||", handleNull $ \[VBool p, VBool q] -> VBool $ p || q)
+    ]
 
 handleNull :: ([Value e] -> Value e) -> [Value e] -> Value e
 handleNull f = \case

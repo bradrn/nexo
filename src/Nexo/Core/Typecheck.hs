@@ -11,8 +11,9 @@ import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.State.Strict (evalStateT)
 import Data.Bifunctor (second)
+import Data.Fix (Fix(Fix))
 import Data.Foldable (for_)
-import Data.Functor.Foldable (cata)
+import Data.Functor.Foldable (para)
 import Data.Traversable (for, forM)
 
 import qualified Data.Map.Strict as Map
@@ -24,6 +25,7 @@ import Nexo.Core.Type
 import Nexo.Expr.Type
 import Nexo.Expr.Unit
 import Nexo.Env
+import Debug.Trace
 
 data Conversion
     = MultiplyBy Double Conversion
@@ -69,12 +71,12 @@ applyConversion
        , MonadScoped e m
        , MonadSubst m
        )
-    => Conversion -> (CoreExpr, Type) -> m (Int, CoreExpr)
-applyConversion (UnliftBy 0 c) (x, t) = applyConversion c (x, t)
-applyConversion (UnliftBy n c) (x, t) = do
-    (n', x') <- applyConversion c (x, t)
-    pure (n+n', x')
-applyConversion (MultiplyBy f c) (x, t) = do
+    => Conversion -> (Expr, (CoreExpr, Type)) -> m (Int, CoreExpr)
+applyConversion (UnliftBy 0 conv) (x, (c, t)) = applyConversion conv (x, (c, t))
+applyConversion (UnliftBy n conv) (x, (c, t)) = do
+    (n', c') <- applyConversion conv (x, (c, t))
+    pure (n+n', c')
+applyConversion (MultiplyBy f conv) (x, (c, t)) = do
     -- need to re-run typechecker to make sure we insert unlifts correctly
     -- note that we avoid infinite recursion by doing all calculations with concordant units
 
@@ -83,9 +85,14 @@ applyConversion (MultiplyBy f c) (x, t) = do
         removeUnits _ = error "applyConversion: bug in inferStep"
         t' = removeUnits t
 
-    x' <- inferStep $ XOp OTimes (pure (CLit (LNum f), TNum Uno)) (pure (x, t'))
-    applyConversion c x'
-applyConversion IdConversion (x, _) = pure (0, x)
+    let xNum = Fix (XAtom (Lit (LNum f)))
+    timesType <- instantiate $ Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UMul (UVarR "u") (UVarR "v"))
+    c' <- inferStep $ XFunApp (Fix (XAtom (Var "*")), pure (CVar "*", timesType))
+        [ (xNum, pure (CLit (LNum f), TNum Uno))
+        , (x, pure (c, t'))
+        ]
+    applyConversion conv (Fix $ XNamedFunApp "*" [xNum, x], c')
+applyConversion IdConversion (_, (c, _)) = pure (0, c)
 
 getConvertedExpr
     :: ( MonadEnv PType m
@@ -94,13 +101,13 @@ getConvertedExpr
        , MonadScoped e m
        , MonadSubst m
        )
-    => Subst -> (CoreExpr, Type) -> Type -> m ((Int, CoreExpr), Conversion)
-getConvertedExpr s (suppliedExpr, suppliedT) declaredT = do
+    => Subst -> (Expr, (CoreExpr, Type)) -> Type -> m ((Int, CoreExpr), Conversion)
+getConvertedExpr s (x, (suppliedExpr, suppliedT)) declaredT = do
     suppliedT' <- whenJustElse "#TYPE" $ apply s suppliedT
     declaredT' <- whenJustElse "#TYPE" $ apply s declaredT
 
     let conv = getConversion suppliedT' declaredT'
-    (,conv) <$> applyConversion conv (suppliedExpr, suppliedT')
+    (,conv) <$> applyConversion conv (x, (suppliedExpr, suppliedT'))
 
 liftBy :: Int -> Type -> Type
 liftBy 0 t = t
@@ -113,7 +120,7 @@ getConvertedArgs
        , MonadScoped e m
        , MonadSubst m
        )
-    => Subst -> ([(CoreExpr, Type)], Type) -> Type -> m ([(Int, CoreExpr)], Type)
+    => Subst -> ([(Expr, (CoreExpr, Type))], Type) -> Type -> m ([(Int, CoreExpr)], Type)
 getConvertedArgs s (supplied, ret) declaredT = do
     let declaredTs = getTFunArgs declaredT
     (convertedArgs, convs) <- unzip <$>
@@ -127,6 +134,8 @@ getConvertedArgs s (supplied, ret) declaredT = do
 
     getMaxLift = foldr (\case {UnliftBy n _ -> max n ; _ -> id}) 0
 
+traverseExprs :: Applicative m => [(x, m y)] -> m [(x, y)]
+traverseExprs = traverse $ \(x, y) -> (x,) <$> y
 
 -- This uses a variant of Hindley-Milner. Rather than composing all
 -- the substitutions then applying at the end, instead it applies each
@@ -141,26 +150,18 @@ inferStep
        , MonadScoped e m
        , MonadSubst m
        )
-    => ExprF (m (CoreExpr, Type))
+    => ExprF (Expr, m (CoreExpr, Type))
     -> m (CoreExpr, Type)
 inferStep = \case
-    XLit n@(LNum _) -> pure (CLit n, TNum Uno)
-    XLit n@(LBool _) -> pure (CLit n, TBool)
-    XLit n@(LText _) -> pure (CLit n, TText)
-    XList xs' -> do
-        xs <- sequenceA xs'
-        tv <- TVar <$> fresh
-        let cs = Unify tv . snd <$> xs
-        s <- solve cs
-
-        elemsConverted <- traverse (fmap fst . flip (getConvertedExpr s) tv) xs
-
-        t <- whenJustElse "#TYPE" $ apply s tv
-        applyToEnv s
-
-        pure (CApp (Right "List") elemsConverted, TList t)
+    XAtom Null -> (CNull,) . TVar <$> fresh
+    XAtom (Lit n@(LNum _)) -> pure (CLit n, TNum Uno)
+    XAtom (Lit n@(LBool _)) -> pure (CLit n, TBool)
+    XAtom (Lit n@(LText _)) -> pure (CLit n, TText)
+    XAtom (Var v) -> do
+        t <- instantiate =<< lookupName v
+        pure (CVar v, t)
     XRecord Nonrecursive r' _ -> do
-        r <- sequenceA r'
+        r <- traverse snd r'
         pure (CRec Nonrecursive $ Map.toList $ fst <$> r, TRecord $ snd <$> r)
     XRecord Recursive r' order -> do
         tsDeclared <- traverse ((fmap.fmap) TVar $ const fresh) r'
@@ -168,33 +169,45 @@ inferStep = \case
         scope $ do
             _ <- Map.traverseWithKey (curry extend) $ Forall [] [] <$> tsDeclared
 
-            let r'WithTvs :: Map.Map String (m (CoreExpr, Type), Type)
+            let r'WithTvs :: Map.Map String ((Expr, m (CoreExpr, Type)), Type)
                 r'WithTvs = Map.merge
                     (Map.mapMissing $ \_ _ -> error "inferStep: bug in XRecord Recursive case")
                     (Map.mapMissing $ \_ _ -> error "inferStep: bug in XRecord Recursive case")
                     (Map.zipWithMatched $ const (,))
                     r' tsDeclared
 
-                r'WithTvsOrdered :: [(String, (m (CoreExpr, Type), Type))]
+                r'WithTvsOrdered :: [(String, ((Expr, m (CoreExpr, Type)), Type))]
                 r'WithTvsOrdered = (\k -> (k, r'WithTvs Map.! k)) <$> order
 
-            r <- flip traverse r'WithTvsOrdered $ \(name, (r'Elem, tDeclared)) -> do
+            r <- for r'WithTvsOrdered $ \(name, ((x, r'Elem), tDeclared)) -> do
                 rElem@(_, tSupplied) <- r'Elem
                 tInferred <- (\(Forall [] [] t) -> t) <$> lookupName name
                 s <- solve
                     [ Unify tSupplied tDeclared  -- to get subst. for type variable
                     , Unify tInferred tDeclared  -- to ensure it's consistent with previous inferences
                     ]
-                xConverted <- snd . fst <$> getConvertedExpr s rElem tDeclared
+                xConverted <- snd . fst <$> getConvertedExpr s (x, rElem) tDeclared
                 applyToEnv s
                 t <- whenJustElse "#TYPE" $ apply s tDeclared
                 pure (name, (xConverted, t))
 
             pure (CRec Recursive (second fst <$> r), TRecord (snd <$> Map.fromList r))
-    XTable r' -> r' >>= \case
+    XFunApp (Fix (XAtom (Var "List")), _) xs' -> do
+        xs <- traverseExprs xs'
+        tv <- TVar <$> fresh
+        let cs = Unify tv . snd . snd <$> xs
+        s <- solve cs
+
+        elemsConverted <- traverse (fmap fst . flip (getConvertedExpr s) tv) xs
+
+        t <- whenJustElse "#TYPE" $ apply s tv
+        applyToEnv s
+
+        pure (CApp (CVar "List") elemsConverted, TList t)
+    XFunApp (Fix (XAtom (Var "Table")), _) r' -> traverse snd r' >>= \case
         -- for 'Table', need to know AT POINT OF TYPECHECKING what the fields are
         -- (unless we get fancy type-level extensible row types!)
-        (x, TRecord r) -> do
+        [(x, TRecord r)] -> do
             ts <- forM r $ \tSupplied -> do
                 tvar <- TVar <$> fresh
                 let tDeclared = TList tvar
@@ -202,25 +215,12 @@ inferStep = \case
                 applyToEnv s
                 whenJustElse "#TYPE" $ apply s tvar
             pure (CTab x, TTable ts)
-        (_, _) -> throwError "#TYPE"
-    XVar v -> do
-        t <- instantiate =<< lookupName v
-        pure (CVar v, t)
-    XLet v t' vx' x' -> do
-        tDeclared <- maybe (TVar <$> fresh) instantiate t'
-        (vx, tSupplied) <- vx'
-        s <- unify (Unify tSupplied tDeclared)
-
-        ((_0, vxConverted), _) <- getConvertedExpr s (vx, tSupplied) tDeclared
-
-        t <- whenJustElse "#TYPE" $ apply s tDeclared
-        applyToEnv s
-
-        scope $ do
-            extend (v, Forall [] [] t)
-            (xRet, tRet) <- x'
-            pure (CLet v vxConverted xRet, tRet)
-    XLam args x -> do
+        _ -> throwError "#TYPE"
+    XFunApp (Fix (XAtom (Var "Lambda")), _) xs -> do
+        let unVar (Fix (XAtom (Var v))) = pure v
+            unVar _ = throwError "#SYNTAX"
+            (_, x) = last xs
+        args <- traverse (unVar . fst) $ init xs
         tvs <- for args $ \arg -> (arg,) <$> fresh
         ((retc, rett), argts) <- scope $ do
             for_ tvs $ extend . second (Forall [] [] . TVar)
@@ -228,7 +228,7 @@ inferStep = \case
             argts <- traverse (instantiate <=< lookupName) args
             pure (ret, argts)
         pure (CLam args retc, TFun argts rett)
-    XField x f -> do
+    XFunApp (Fix (XAtom (Var "GetField")), _) [(_, x), (Fix (XAtom (Var f)), _)] -> do
         (r, rt) <- x
         tv <- fresh
         -- unify with minimal record which could work
@@ -237,43 +237,32 @@ inferStep = \case
         -- then back-substitute
         t <- whenJustElse "#TYPE" $ apply s (TVar tv)
         applyToEnv s
-        pure (CApp (Right "GetField") [(0,r), (0,CLit (LText f))], t)
-    XFun f args' -> do
-        tfun <- instantiate =<< lookupName f
-        args <- sequenceA args'
+        pure (CApp (CVar "GetField") [(0,r), (0,CLit (LText f))], t)
+    XFunApp (_, f) args' -> do
+        (c, tfun) <- f
+        args <- traverseExprs args'
         tv <- fresh
-        s <- solve [Subtype tfun (TFun (snd <$> args) (TVar tv))]
+        s <- solve [Subtype tfun (TFun (snd . snd <$> args) (TVar tv))]
 
         (argsConverted, ret) <- getConvertedArgs s (args, TVar tv) tfun
-        
-        pure (CApp (Right f) argsConverted, ret)
-    XOp o arg1' arg2' -> do
-        tfun <- instantiate =<< optype o
-        arg1@(_, t1) <- arg1'
-        arg2@(_, t2) <- arg2'
-        tv <- fresh
-        s <- solve [Subtype tfun (TFun [t1,t2] (TVar tv))]
-
-        (argsConverted, ret) <- getConvertedArgs s ([arg1,arg2], TVar tv) tfun
         applyToEnv s
-
-        pure (CApp (Left o) argsConverted, ret)
-    XUnit x' u -> do
+        
+        pure (CApp c argsConverted, ret)
+    XUnitApp (_, x') u -> do
         (x, t) <- x'
         _ <- solve [Subtype t (TNum Uno)]
 
         case getConversion t (TNum Uno) of
             UnliftBy n _ -> pure (x, liftBy n $ TNum u)
             _            -> pure (x, TNum u)
-    XTApp x' pty -> do
+    XTypeApp (orig, x') pty -> do
         let t' = instantiateRigid pty
         (x, t) <- x'
         s <- unify (Unify t t')
 
-        ((_0, xConverted), _) <- getConvertedExpr s (x, t) t'
+        ((_0, xConverted), _) <- getConvertedExpr s (orig, (x, t)) t'
         applyToEnv s
         pure (xConverted, t')
-    XNull -> (CNull,) . TVar <$> fresh
 
 typecheck
     :: ( MonadEnv PType f
@@ -281,16 +270,4 @@ typecheck
        , MonadScoped e f
        , MonadSubst f
        ) => Expr -> f (CoreExpr, PType)
-typecheck = flip evalStateT (0::Int) . fmap (second generalise) . cata inferStep
-
-optype :: MonadError String m => Op -> m PType
-optype OEq    = pure $ Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a")
-optype ONeq   = pure $ Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a")
-optype OPlus  = pure $ Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u")
-optype OMinus = pure $ Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u")
-optype OTimes = pure $ Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UMul (UVarR "u") (UVarR "v"))
-optype ODiv   = pure $ Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UDiv (UVarR "u") (UVarR "v"))
-optype OGt    = pure $ Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool
-optype OLt    = pure $ Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool
-optype OAnd   = pure $ Forall [] []         $ TFun [TBool, TBool] TBool
-optype OOr    = pure $ Forall [] []         $ TFun [TBool, TBool] TBool
+typecheck = flip evalStateT (0::Int) . fmap (second generalise) . para inferStep

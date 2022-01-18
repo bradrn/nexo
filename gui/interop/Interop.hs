@@ -31,24 +31,24 @@ cFalse, cTrue :: CBool
 cFalse = 0
 cTrue = 1
 
-hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr (Expr, Widget))
+hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr (AST, Widget))
 hsParseExpr cinput successPtr = do
     input <- GHC.peekCString utf8 cinput
     case parseMaybe pExpr input of
-        Nothing -> poke successPtr cFalse >> newStablePtr (Fix XNull, ValueCell "")
+        Nothing -> poke successPtr cFalse >> newStablePtr (Fix ASTNull, ValueCell "")
         Just (delocalise -> xp) -> poke successPtr cTrue >> newStablePtr (xp, ValueCell input)
 
-hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr (Expr, Widget))
+hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr (AST, Widget))
 hsParseLiteralList clen cinput successPtr = do
     cinputs <- peekArray (fromIntegral clen) cinput
     inputs <- traverse (GHC.peekCString utf8) cinputs
     case traverse (parseMaybe pLit) inputs of
-        Nothing -> poke successPtr cFalse >> newStablePtr (Fix XNull, ValueCell "")
+        Nothing -> poke successPtr cFalse >> newStablePtr (Fix ASTNull, ValueCell "")
         Just values ->
-            let xp = Fix . XList $ Fix . XLit <$> values
+            let xp = Fix . ASTList $ Fix . ASTLit <$> values
             in poke successPtr cTrue >> newStablePtr (xp, InputList inputs)
 
-hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString) -> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (Expr, Widget))
+hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString) -> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (AST, Widget))
 hsParseTable clen cheader cformula ccollen ccol successPtr = do
     cheaders <- peekArray (fromIntegral clen) cheader
     headers <- traverse (GHC.peekCString utf8) cheaders
@@ -68,9 +68,9 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
             ((fmap.fmap.fmap) delocalise colExprss)
 
     case columns' of
-        Nothing -> poke successPtr cFalse >> newStablePtr (Fix XNull, ValueCell "")
+        Nothing -> poke successPtr cFalse >> newStablePtr (Fix ASTNull, ValueCell "")
         Just columns ->
-            let xp  = Fix  $ XTable $ Fix  $ XRecord Recursive (Map.fromList $ zip headers columns) headers
+            let xp  = Fix  $ ASTFun "Table" [Fix $ ASTRecord Recursive (Map.fromList $ zip headers columns) headers]
             in poke successPtr cTrue >> newStablePtr (xp, Table $ zip headers $ zipWith mkColumnEither formulae colss)
   where
     ptrToMaybe :: Storable a => Ptr a -> IO (Maybe a)
@@ -78,9 +78,9 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
         | p == nullPtr = pure Nothing
         | otherwise    = Just <$> peek p
 
-    mkColumnExpr :: Maybe Expr -> Maybe [Expr] -> Maybe Expr
+    mkColumnExpr :: Maybe AST -> Maybe [AST] -> Maybe AST
     mkColumnExpr (Just x) _         = Just x
-    mkColumnExpr _       (Just col) = Just $ Fix $ XList col
+    mkColumnExpr _       (Just col) = Just $ Fix $ ASTList col
     mkColumnExpr Nothing Nothing    = Nothing
 
     mkColumnEither :: Maybe String -> [String] -> Either String [String]
@@ -95,7 +95,7 @@ hsMaybeParseType cinput = do
 hsNothing :: IO (StablePtr (Maybe a))
 hsNothing = newStablePtr Nothing
 
-hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr (Expr, Widget) -> IO (StablePtr Cell)
+hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr (AST, Widget) -> IO (StablePtr Cell)
 hsMkCell cname tptr xptr = do
     name <- GHC.peekCString utf8 cname
     type_ <- deRefStablePtr tptr
@@ -133,7 +133,7 @@ hsQueryCell k ptr successPtr = do
     ref <- deRefStablePtr ptr
     Sheet s <- readIORef ref
     case Map.lookup (fromIntegral k) s of
-        Nothing -> poke successPtr cFalse >> newStablePtr (Cell "" Nothing (ValueCell "") (Fix XNull) Invalidated)
+        Nothing -> poke successPtr cFalse >> newStablePtr (Cell "" Nothing (ValueCell "") (Fix ASTNull) Invalidated)
         Just cl -> poke successPtr cTrue  >> newStablePtr cl
 
 hsWidgetType :: StablePtr Cell -> IO CInt
@@ -245,12 +245,12 @@ hsNullStablePtr :: IO (StablePtr ())
 hsNullStablePtr = newStablePtr ()
 
 foreign export ccall hsNewSheet :: IO (StablePtr (IORef Sheet))
-foreign export ccall hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr (Expr, Widget))
-foreign export ccall hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr (Expr, Widget))
-foreign export ccall hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString)-> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (Expr, Widget))
+foreign export ccall hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr (AST, Widget))
+foreign export ccall hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr (AST, Widget))
+foreign export ccall hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString)-> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (AST, Widget))
 foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
 foreign export ccall hsNothing :: IO (StablePtr (Maybe a))
-foreign export ccall hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr (Expr, Widget) -> IO (StablePtr Cell)
+foreign export ccall hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr (AST, Widget) -> IO (StablePtr Cell)
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()
 foreign export ccall hsEvalSheet :: StablePtr (IORef Sheet) -> IO () 
 foreign export ccall hsCellIndices :: StablePtr (IORef Sheet) -> Ptr CInt -> IO (Ptr CInt)

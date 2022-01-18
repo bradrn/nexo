@@ -80,20 +80,6 @@ fromLit (LNum n) = VNum n
 fromLit (LBool b) = VBool b
 fromLit (LText t) = VText t
 
-evalOp :: Op -> [Value e] -> Value e
-evalOp _ l | any (\case VNull -> True; _ -> False) l = VNull
-evalOp OPlus  [VNum i1, VNum i2] = VNum $ i1 + i2
-evalOp OMinus [VNum i1, VNum i2] = VNum $ i1 - i2
-evalOp OTimes [VNum i1, VNum i2] = VNum $ i1 * i2
-evalOp ODiv   [VNum i1, VNum i2] = VNum $ i1 / i2
-evalOp OEq    [v1     , v2     ] = VBool $ v1 == v2
-evalOp ONeq   [v1     , v2     ] = VBool $ v1 /= v2
-evalOp OGt    [VNum i1, VNum i2] = VBool $ i1 > i2
-evalOp OLt    [VNum i1, VNum i2] = VBool $ i1 < i2
-evalOp OAnd   [VBool p, VBool q] = VBool $ p && q
-evalOp OOr    [VBool p, VBool q] = VBool $ p || q
-evalOp _ _ = error "evalApp: bug in typechecker"
-
 broadcast :: MonadError String f => ([Value e] -> f (Value e)) -> [(Int, Value e)] -> f (Value e)
 broadcast fn args
     | all ((0==) . fst) args = fn $ snd <$> args
@@ -149,9 +135,8 @@ evalExpr = para \case
         vs' >>= \case
             VRecord vs -> pure $ VTable $ getList <$> vs
             _ -> error "evalExpr.CTabF: bug in typechecker"
-    CAppF (Left  op) es -> broadcast (pure . evalOp op) =<< traverse liftTuple' es
-    CAppF (Right fn) es -> do
-        v <- join $ lookupName fn
+    CAppF (_, fn) es -> do
+        v <- fn
         broadcast (fromClosure v) =<< traverse liftTuple' es
     CNullF -> pure VNull
   where

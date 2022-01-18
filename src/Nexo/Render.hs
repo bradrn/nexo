@@ -13,10 +13,10 @@ import qualified Data.Map as Map
 import Nexo.Expr.Type
 import Nexo.Sheet
 
-renderStep :: ExprF String -> String
-renderStep (XLit lit) = renderLit lit
-renderStep (XList ss) = '[' : intercalate ", " ss ++ "]"
-renderStep (XRecord r rec ss) =
+renderStep :: ASTF String -> String
+renderStep (ASTLit lit) = renderLit lit
+renderStep (ASTList ss) = '[' : intercalate ", " ss ++ "]"
+renderStep (ASTRecord r rec ss) =
     let r' = case r of
             Recursive -> "rec"
             Nonrecursive -> ""
@@ -26,18 +26,17 @@ renderStep (XRecord r rec ss) =
     pickElFromMap m k =
         let v = m Map.! k
         in k ++ ": " ++ v
-renderStep (XTable s) = "Table(" ++ s ++ ")"
-renderStep (XVar s) = s
-renderStep (XLet k t' v x) = case t' of
+renderStep (ASTVar s) = s
+renderStep (ASTLet k t' v x) = case t' of
     Just t  -> "Let(" ++ k ++ " : " ++ renderType t ++ ", " ++ v ++ ", " ++ x ++ ")"
     Nothing -> "Let(" ++ k ++                          ", " ++ v ++ ", " ++ x ++ ")"
-renderStep (XLam vs x) = "(" ++ intercalate ", " vs ++ ") -> " ++ x
-renderStep (XField s str) = '(' : s ++ ")." ++ str
-renderStep (XFun s ss) = s ++ "(" ++ intercalate ", " ss ++ ")"
-renderStep (XOp op x1 x2) = '(' : x1 ++ ") " ++ renderOp op ++ " (" ++ x2 ++ ")"
-renderStep (XUnit s u) = "(" ++ s ++ ") " ++ renderUnit u
-renderStep (XTApp s t) = "(" ++ s ++ ") : " ++ renderType t
-renderStep XNull = "Null"
+renderStep (ASTLam vs x) = "(" ++ intercalate ", " vs ++ ") -> " ++ x
+renderStep (ASTField s str) = '(' : s ++ ")." ++ str
+renderStep (ASTFun s ss) = s ++ "(" ++ intercalate ", " ss ++ ")"
+renderStep (ASTOp op x1 x2) = '(' : x1 ++ ") " ++ op ++ " (" ++ x2 ++ ")"
+renderStep (ASTUnit s u) = "(" ++ s ++ ") " ++ renderUnit u
+renderStep (ASTTApp s t) = "(" ++ s ++ ") : " ++ renderType t
+renderStep ASTNull = "Null"
 
 renderUnit :: UnitDef -> String
 renderUnit (ULeaf s) = s
@@ -50,18 +49,6 @@ renderUnit (UExp u@(UVar _) n)    = renderUnit u ++ '^' : show n
 renderUnit (UExp u n) = '(' : renderUnit u ++ ")^" ++ show n
 renderUnit (UVar (Rigid v)) = '\'' : v
 renderUnit (UVar (Undetermined v)) = '\'' : v
-
-renderOp :: Op -> String
-renderOp OPlus  = "+"
-renderOp OMinus = "-"
-renderOp OTimes = "*"
-renderOp ODiv   = "/"
-renderOp OEq    = "="
-renderOp ONeq   = "<>"
-renderOp OGt    = ">"
-renderOp OLt    = "<"
-renderOp OAnd   = "&&"
-renderOp OOr    = "||"
 
 renderType :: PType -> String
 renderType (Forall _ts _us t) = go t
@@ -81,10 +68,10 @@ renderLit (LNum x) = show x
 renderLit (LBool b) = show b
 renderLit (LText s) = show s
 
-renderExpr :: Expr -> String
+renderExpr :: AST -> String
 renderExpr = cata renderStep
 
-renderPartialExpr :: Free ExprF String -> String
+renderPartialExpr :: Free ASTF String -> String
 renderPartialExpr = cata $ \case
    TF.Pure s -> s
    TF.Free x -> renderStep x
@@ -95,19 +82,19 @@ renderCell Cell{..} =
   where
     (defName, cellRaw) = case cellWidget of
         ValueCell s -> ("DefValue", Pure s)
-        InputList ss -> ("DefList", Free $ XList $ Pure <$> ss)
+        InputList ss -> ("DefList", Free $ ASTList $ Pure <$> ss)
         Table ss ->
             ("DefTable"
-            , Free $ XTable $ Free $ XRecord Recursive (fromFormulaOrList <$> Map.fromList ss) (fst <$> ss)
+            , Free $ ASTFun "Table" [Free $ ASTRecord Recursive (fromFormulaOrList <$> Map.fromList ss) (fst <$> ss)]
             )
 
     optionalCellType = case cellType of
         Nothing -> ""
         Just t -> ' ' : ':' : ' ' : renderType t
 
-    fromFormulaOrList :: Either String [String] -> Free ExprF String
+    fromFormulaOrList :: Either String [String] -> Free ASTF String
     fromFormulaOrList (Left f) = Pure f
-    fromFormulaOrList (Right l) = Free $ XList $ Pure <$> l
+    fromFormulaOrList (Right l) = Free $ ASTList $ Pure <$> l
 
 renderSheet :: Sheet -> String
 renderSheet (Sheet s) = intercalate "\n" $ renderCell <$> Map.elems s

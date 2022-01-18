@@ -15,7 +15,7 @@ data CoreExpr
     | CLam [String] CoreExpr
     | CRec Recursivity [(String, CoreExpr)]
     | CTab CoreExpr
-    | CApp (Either Op String) [(Int, CoreExpr)]
+    | CApp CoreExpr [(Int, CoreExpr)]
     | CNull
     deriving (Show)
 
