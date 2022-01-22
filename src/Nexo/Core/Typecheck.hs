@@ -25,7 +25,6 @@ import Nexo.Core.Type
 import Nexo.Expr.Type
 import Nexo.Expr.Unit
 import Nexo.Env
-import Debug.Trace
 
 data Conversion
     = MultiplyBy Double Conversion
