@@ -180,11 +180,7 @@ inferStep = \case
 
             r <- for r'WithTvsOrdered $ \(name, ((x, r'Elem), tDeclared)) -> do
                 rElem@(_, tSupplied) <- r'Elem
-                tInferred <- (\(Forall [] [] t) -> t) <$> lookupName name
-                s <- solve
-                    [ Unify tSupplied tDeclared  -- to get subst. for type variable
-                    , Unify tInferred tDeclared  -- to ensure it's consistent with previous inferences
-                    ]
+                s <- unify (Unify tSupplied tDeclared)
                 xConverted <- snd . fst <$> getConvertedExpr s (x, rElem) tDeclared
                 applyToEnv s
                 t <- whenJustElse "#TYPE" $ apply s tDeclared
