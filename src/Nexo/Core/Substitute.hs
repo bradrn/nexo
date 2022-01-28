@@ -89,8 +89,8 @@ instance Substitutable PType where
 
     frees (Forall as us t) =
         let (vs, xs) = frees t
-        in ( vs `Set.difference` (Set.fromList $ Rigid <$> as)
-           , xs `Set.difference` (Set.fromList $ Rigid <$> us)
+        in ( vs `Set.difference` Set.fromList (Rigid <$> as)
+           , xs `Set.difference` Set.fromList (Rigid <$> us)
            )
 
 occurs :: Substitutable a => TVar -> a -> Bool

@@ -1,6 +1,3 @@
-{-# LANGUAGE LambdaCase    #-}
-{-# LANGUAGE TupleSections #-}
-
 module Nexo.Sheet.Parse where
 
 import Control.Applicative.Combinators (many)

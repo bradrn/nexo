@@ -1,12 +1,7 @@
-{-# LANGUAGE BlockArguments     #-}
-{-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE MultiWayIf         #-}
-{-# LANGUAGE PatternSynonyms    #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell    #-}
-{-# LANGUAGE TupleSections      #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE LambdaCase     #-}
+{-# LANGUAGE MultiWayIf     #-}
+{-# LANGUAGE TypeFamilies   #-}
 
 module Nexo.Expr.Unit where
 
