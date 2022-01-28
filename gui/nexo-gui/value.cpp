@@ -9,6 +9,7 @@
 #include <QLineEdit>
 #include <QListView>
 #include <QStringListModel>
+#include <QTextEdit>
 
 Value::Value(int key, HsSheet *sheet, QWidget *parent)
     : QWidget(parent)
@@ -67,7 +68,7 @@ void Value::requery()
 
     if (QString *msg = std::get_if<QString>(&result))
     {
-        setValueText(*msg);
+        setErrorText(*msg);
     }
     else if (HsValue *value = std::get_if<HsValue>(&result))
     {
@@ -104,6 +105,13 @@ void Value::setValueText(QString valueText)
     auto valueEdit = getEditWidget<QLineEdit>();
     valueEdit->setReadOnly(true);
     valueEdit->setText(valueText);
+}
+
+void Value::setErrorText(QString errorText)
+{
+    auto errorEdit = getEditWidget<QTextEdit>();
+    errorEdit->setReadOnly(true);
+    errorEdit->setText(errorText);
 }
 
 template<class W>

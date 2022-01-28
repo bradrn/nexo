@@ -34,6 +34,7 @@ private:
     W* getEditWidget();
 
     void setValueText(QString valueText);
+    void setErrorText(QString errorText);
 };
 
 #endif // VALUE_H

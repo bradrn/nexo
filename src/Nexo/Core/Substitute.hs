@@ -5,7 +5,6 @@
 module Nexo.Core.Substitute where
 
 import Control.Monad (replicateM)
-import Control.Monad.Except (MonadError(..))
 import Control.Monad.State.Strict (StateT, MonadState (get, put))
 import Data.Traversable (for)
 
@@ -99,13 +98,13 @@ occurs a t =
     let (vs, us) = frees t
     in a `Set.member` Set.union vs us
 
-bind :: MonadError String m => String -> Either Type UnitDef -> m Subst
+bind :: String -> Either Type UnitDef -> Maybe Subst
 bind v (Left (TVar v'))
     | Undetermined v == v' = pure nullSubst
-    | occurs (Undetermined v) (TVar v') = throwError "#INFT"
+    | occurs (Undetermined v) (TVar v') = Nothing
 bind v (Right (UVar v'))
     | Undetermined v == v' = pure nullSubst
-    | occurs (Undetermined v) (UVar v') = throwError "#INFT"
+    | occurs (Undetermined v) (UVar v') = Nothing
 bind v t = pure $ Map.singleton v t
 
 class Monad m => MonadFresh m where
@@ -119,7 +118,7 @@ instance Monad m => MonadFresh (StateT Int m) where
       where
         letters = [1..] >>= flip replicateM ['a'..'z']
 
-instantiate :: (MonadError String m, MonadFresh m) => PType -> m Type
+instantiate :: MonadFresh m => PType -> m Type
 instantiate (Forall as us t) = do
     as' <- for as $ \a -> (a,) <$> fresh
     us' <- for us $ \u -> (u,) <$> fresh

@@ -12,6 +12,7 @@
 module Nexo.Interpret
        ( Value(..)
        , PrimClosure(..)
+       , RuntimeError(..)
        , render
        , evalExpr
        ) where
@@ -80,12 +81,16 @@ fromLit (LNum n) = VNum n
 fromLit (LBool b) = VBool b
 fromLit (LText t) = VText t
 
-broadcast :: MonadError String f => ([Value e] -> f (Value e)) -> [(Int, Value e)] -> f (Value e)
+data RuntimeError
+    = DimensionMismatch 
+    deriving (Show, Eq)
+
+broadcast :: MonadError RuntimeError f => ([Value e] -> f (Value e)) -> [(Int, Value e)] -> f (Value e)
 broadcast fn args
     | all ((0==) . fst) args = fn $ snd <$> args
     | otherwise = fmap VList $ traverse (broadcast fn) =<< unliftSplit args
   where
-    unliftSplit :: MonadError String f => [(Int, Value e)] -> f [[(Int, Value e)]]
+    unliftSplit :: MonadError RuntimeError f => [(Int, Value e)] -> f [[(Int, Value e)]]
     unliftSplit args' =
         let levels = fst <$> args'
             maxlevel = if null levels then 0 else maximum levels
@@ -97,7 +102,7 @@ broadcast fn args
                 levels args'
         in fmap (replaceIn placeholders) <$> transposeVLists fills
 
-    transposeVLists :: MonadError String f => [(Int, Value e)] -> f [[(Int, Value e)]]
+    transposeVLists :: MonadError RuntimeError f => [(Int, Value e)] -> f [[(Int, Value e)]]
     transposeVLists = transpose' . fmap extractVList
       where
         extractVList (i, VList l) = (i-1,) <$> l
@@ -108,7 +113,7 @@ broadcast fn args
             let lens = length <$> ls in
                 if all (==head lens) lens
                 then pure $ transpose ls
-                else throwError "#LENGTH"
+                else throwError DimensionMismatch
 
     replaceIn :: [Maybe a] -> [a] -> [a]
     replaceIn [] _ = []
@@ -116,7 +121,14 @@ broadcast fn args
     replaceIn (Nothing:_) _ = error "broadcast: bug in unlifter"
     replaceIn (Just i:is) rs = i : replaceIn is rs
 
-evalExpr :: (MonadEnv (f (Value e)) f, MonadScoped e f, Scoped e, MonadError String f) => CoreExpr -> f (Value e)
+
+evalExpr
+    :: ( MonadEnv (f (Value e)) f
+       , MonadScoped e f
+       , Scoped e
+       , MonadError RuntimeError f
+       )
+    => CoreExpr -> f (Value e)
 evalExpr = para \case
     CLitF v -> pure $ fromLit v
     CVarF name -> join $ lookupName name
@@ -153,7 +165,7 @@ evalExpr = para \case
     fromClosure
         :: forall m e.
            ( MonadEnv (m (Value e)) m
-           , MonadError String m
+           , MonadError RuntimeError m
            , MonadScoped e m
            , Scoped e)
         => Value e -> ([Value e] -> m (Value e))

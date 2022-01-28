@@ -1,7 +1,6 @@
-{-# LANGUAGE LambdaCase      #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase #-}
 
-module Nexo.Render (renderType, renderExpr, renderPartialExpr, renderCell, renderSheet) where
+module Nexo.Render (renderMonomorphicType, renderType, renderExpr, renderPartialExpr) where
 
 import Control.Monad.Free
 import Data.Functor.Foldable (cata)
@@ -11,7 +10,6 @@ import qualified Control.Monad.Trans.Free as TF
 import qualified Data.Map as Map
 
 import Nexo.Expr.Type
-import Nexo.Sheet
 
 renderStep :: ASTF String -> String
 renderStep (ASTLit lit) = renderLit lit
@@ -51,17 +49,19 @@ renderUnit (UVar (Rigid v)) = '\'' : v
 renderUnit (UVar (Undetermined v)) = '\'' : v
 
 renderType :: PType -> String
-renderType (Forall _ts _us t) = go t
-  where
-    go (TNum u) = "Num<" ++ renderUnit u ++ ">"
-    go TBool = "Bool"
-    go TText = "Text"
-    go (TVar (Rigid v)) = '\'' : v
-    go (TVar (Undetermined v)) = '\'' : v
-    go (TFun vs x) = "(" ++ intercalate ", " (go <$> vs) ++ ") -> " ++ go x
-    go (TList a) = "List(" ++ go a ++ ")"
-    go (TRecord rec) = '(' : intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ go v]) rec) ++ ")"
-    go (TTable rec) = "Table(" ++ intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ go v]) rec) ++ ")"
+renderType (Forall _ts _us t) = renderMonomorphicType t
+
+renderMonomorphicType :: Type -> String
+renderMonomorphicType = \case
+    TNum u -> "Num<" ++ renderUnit u ++ ">"
+    TBool -> "Bool"
+    TText -> "Text"
+    TVar (Rigid v) -> '\'' : v
+    TVar (Undetermined v) -> '\'' : v
+    TFun vs x -> "(" ++ intercalate ", " (renderMonomorphicType <$> vs) ++ ") -> " ++ renderMonomorphicType x
+    TList a -> "List(" ++ renderMonomorphicType a ++ ")"
+    TRecord rec -> '(' : intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderMonomorphicType v]) rec) ++ ")"
+    TTable rec -> "Table(" ++ intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderMonomorphicType v]) rec) ++ ")"
 
 renderLit :: Literal -> String
 renderLit (LNum x) = show x
@@ -75,26 +75,3 @@ renderPartialExpr :: Free ASTF String -> String
 renderPartialExpr = cata $ \case
    TF.Pure s -> s
    TF.Free x -> renderStep x
-
-renderCell :: Cell -> String
-renderCell Cell{..} =
-    defName ++ '(' : cellName ++ optionalCellType ++ ", " ++ renderPartialExpr cellRaw ++ ")"
-  where
-    (defName, cellRaw) = case cellWidget of
-        ValueCell s -> ("DefValue", Pure s)
-        InputList ss -> ("DefList", Free $ ASTList $ Pure <$> ss)
-        Table ss ->
-            ("DefTable"
-            , Free $ ASTFun "Table" [Free $ ASTRecord Recursive (fromFormulaOrList <$> Map.fromList ss) (fst <$> ss)]
-            )
-
-    optionalCellType = case cellType of
-        Nothing -> ""
-        Just t -> ' ' : ':' : ' ' : renderType t
-
-    fromFormulaOrList :: Either String [String] -> Free ASTF String
-    fromFormulaOrList (Left f) = Pure f
-    fromFormulaOrList (Right l) = Free $ ASTList $ Pure <$> l
-
-renderSheet :: Sheet -> String
-renderSheet (Sheet s) = intercalate "\n" $ renderCell <$> Map.elems s

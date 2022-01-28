@@ -20,9 +20,10 @@ import Nexo.Expr.Parse
 import Nexo.Expr.Type
 import Nexo.Expr.Type.Annotated (delocalise)
 import Nexo.Interpret (Value(..), render)
-import Nexo.Render (renderType, renderSheet)
+import Nexo.Render (renderType)
 import Nexo.Sheet
 import Nexo.Sheet.Parse (parseSheet)
+import Nexo.Sheet.Render (renderSheet)
 
 hsNewSheet :: IO (StablePtr (IORef Sheet))
 hsNewSheet = newStablePtr =<< newIORef (Sheet Map.empty)

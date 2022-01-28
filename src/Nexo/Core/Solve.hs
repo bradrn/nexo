@@ -5,7 +5,6 @@
 module Nexo.Core.Solve where
 
 import Control.Monad (join)
-import Control.Monad.Except (MonadError(..))
 import Data.Traversable (for)
 
 import qualified Data.Map.Strict as Map
@@ -25,14 +24,9 @@ instance Substitutable Constraint where
     frees (Unify t1 t2)   = frees t1 <> frees t2
     frees (Subtype t1 t2) = frees t1 <> frees t2
     
-whenJustElse :: MonadError String m => String -> Maybe a -> m a
-whenJustElse s = maybe (throwError s) pure
+whenRight :: Either a b -> Maybe b
+whenRight = either (const Nothing) Just
 
-traverse2 :: MonadError String f => String -> (a -> b -> f c) -> [a] -> [b] -> f [c]
-traverse2 e f (a:as) (b:bs) = (:) <$> f a b <*> traverse2 e f as bs
-traverse2 _ _ [] [] = pure []
-traverse2 e _ _ _ = throwError e
-    
 {- TYPING RULES
 
 Definitions:
@@ -56,21 +50,21 @@ Note that in the implementation, some derived rules for ∼ are
 implemented directly, because it’s easier than using the definition.
 -}
     
-unify :: MonadError String m => Constraint -> m Subst
+unify :: Constraint -> Maybe Subst
 unify (Subtype (TList t1) (TList t2)) = unify (Subtype t1 t2)
 unify (Subtype (TList t1) t2) = unify (Subtype t1 t2)
 unify (Subtype (TFun ts1 r1) (TFun ts2 r2)) =
     let cs = Unify r1 r2 : zipWith Subtype ts2 ts1
-    in solve cs
+    in whenRight $ solve cs
 unify (Subtype (TRecord r1) (TRecord r2)) = do
     let merged = Map.merge
              Map.dropMissing                          -- OK if first record has fields not in second
-            (Map.mapMissing $ \_ _ -> throwError "#UNIFY")  -- but throwError if expected fields are missing
+            (Map.mapMissing $ \_ _ -> Nothing)  -- but throw error if expected fields are missing
             -- try to unify if they do
             (Map.zipWithMatched $ \_ x y -> pure $ Unify x y)
             r1 r2
     cs <- sequenceA $ Map.elems merged
-    solve cs
+    whenRight $ solve cs
 unify (Subtype (TTable t1) r2) = do
     let r1 = TRecord $ TList <$> t1
     unify (Subtype r1 r2)
@@ -84,31 +78,31 @@ unify (Unify r (TVar (Undetermined v))) = bind v (Left r)
 unify (Unify (TFun ts1 r1) (TFun ts2 r2))
     | length ts1 == length ts2 =
         let cs = Unify r1 r2 : zipWith Unify ts1 ts2
-        in solve cs
-    | otherwise = throwError "#UNIFY"
+        in whenRight $ solve cs
+    | otherwise = Nothing
 unify (Unify (TList t1) (TList t2)) = unify $ Unify t1 t2
 unify (Unify (TRecord r1) (TRecord r2)) = do
     let merged = Map.merge
-            (Map.mapMissing $ \_ _ -> throwError "#UNIFY")
-            (Map.mapMissing $ \_ _ -> throwError "#UNIFY")
+            (Map.mapMissing $ \_ _ -> Nothing)
+            (Map.mapMissing $ \_ _ -> Nothing)
             (Map.zipWithMatched $ \_ x y -> pure $ Subtype x y)
             r1 r2
     cs <- sequenceA $ Map.elems merged
-    solve cs
+    whenRight $ solve cs
 unify (Unify (TTable t1) (TTable t2)) = do
     let merged = Map.merge
-            (Map.mapMissing $ \_ _ -> throwError "#UNIFY")
-            (Map.mapMissing $ \_ _ -> throwError "#UNIFY")
+            (Map.mapMissing $ \_ _ -> Nothing)
+            (Map.mapMissing $ \_ _ -> Nothing)
             (Map.zipWithMatched $ \_ x y -> pure $ Subtype x y)
             t1 t2
     cs <- sequenceA $ Map.elems merged
-    solve cs
-unify _ = throwError "#UNIFY"
+    whenRight $ solve cs
+unify _ = Nothing
 
-unifyU :: MonadError String m => UnitDef -> UnitDef -> m Subst
-unifyU ud vd = join $ whenJustElse "#UNIFY" $ go <$> simplify ud <*> simplify vd
+unifyU :: UnitDef -> UnitDef -> Maybe Subst
+unifyU ud vd = join $ go <$> simplify ud <*> simplify vd
   where
-    go :: MonadError String m => Unit -> Unit -> m Subst
+    go :: Unit -> Unit -> Maybe Subst
     go (f, u) (g, v)
         | (units, uvars) <- splitEither u
         , [(Right (Undetermined t), x)] <- Map.toList uvars
@@ -122,7 +116,7 @@ unifyU ud vd = join $ whenJustElse "#UNIFY" $ go <$> simplify ud <*> simplify vd
             v'' <- for v' $ \n ->
                 case properFraction @Double @Int (fromIntegral n / fromIntegral x) of
                     (n', 0) -> pure n'
-                    _ -> throwError "#FRACT"
+                    _ -> Nothing
             bind t (Right $ unitToDef ((g/f)**(1/fromIntegral x), v''))
 
         | (vnits, vvars) <- splitEither v
@@ -136,21 +130,25 @@ unifyU ud vd = join $ whenJustElse "#UNIFY" $ go <$> simplify ud <*> simplify vd
             u'' <- for u' $ \n ->
                 case properFraction @Double @Int (fromIntegral n / fromIntegral x) of
                     (n', 0) -> pure n'
-                    _ -> throwError "#FRACT"
+                    _ -> Nothing
             bind t (Right $ unitToDef ((f/g)**(1/fromIntegral x), u''))
 
         | u == v = pure nullSubst
-        | otherwise = throwError "#UNIFY"
+        | otherwise = Nothing
 
     splitEither :: Map.Map (Either a b) c -> (Map.Map (Either a b) c, Map.Map (Either a b) c)
     splitEither = Map.mapEitherWithKey $ \case
         Left _ -> Left
         Right _ -> Right
 
-solve :: MonadError String m => [Constraint] -> m Subst
+solve :: [Constraint] -> Either Constraint Subst
 solve [] = pure nullSubst
-solve (c:cs) = do
-    s1 <- unify c
-    cs' <- whenJustElse "#UNIFY" $ traverse (apply s1) cs
-    s2 <- solve cs'
-    whenJustElse "#UNIFY" $ s2 `compose` s1
+solve (c:cs) =
+    case unify c of
+        Nothing -> Left c
+        Just s1 ->
+            case traverse (apply s1) cs of
+                Nothing -> Left c
+                Just cs' -> do
+                    s2 <- solve cs'
+                    maybe (Left c) Right $ s2 `compose` s1
