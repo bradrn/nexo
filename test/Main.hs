@@ -16,9 +16,10 @@ import Nexo.Core.Substitute (generalise)
 import Nexo.Expr.Type
 import Nexo.Expr.Unit
 import Nexo.Interpret
-import Nexo.Render (renderExpr, renderSheet)
+import Nexo.Render (renderExpr)
 import Nexo.Sheet
 import Nexo.Sheet.Parse
+import Nexo.Sheet.Render (renderSheet)
 import Nexo.Test
 
 main :: IO ()
