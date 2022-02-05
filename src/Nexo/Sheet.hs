@@ -40,7 +40,7 @@ import Nexo.Core.Substitute
 import Nexo.Core.Typecheck
 import Nexo.Expr.Type
 import Nexo.Interpret
-import Nexo.Env (MonadScoped(..), MonadEnv(..), MonadSubst(..), Scoped(..))
+import Nexo.Env (MonadScoped(..), MonadEnv(..), MonadSubst(..))
 import Nexo.Expr.Desugar
 import Nexo.Env.Std
 import Nexo.Error
@@ -91,18 +91,6 @@ data GlobalEnv = GlobalEnv
     }
 instance Show GlobalEnv where
     show _ = "\\VSE[]"
-
-instance Scoped GlobalEnv where
-    nullEnv = GlobalEnv
-        { globalCells = Map.empty
-        , localTypes = []
-        , localValues = []
-        }
-    e1 `addScope` e2 = GlobalEnv
-        { globalCells = globalCells e1
-        , localTypes = localTypes e2 ++ localTypes e1
-        , localValues = localValues e2 ++ localValues e1
-        }
 
 instance Substitutable GlobalEnv where
     apply s GlobalEnv{..} =

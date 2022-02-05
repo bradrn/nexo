@@ -30,10 +30,6 @@ instance MonadScoped e m => MonadScoped e (ExceptT x m) where
 -- can't make these instances since they conflict with cases where
 -- names can be looked up /only/ in an ExceptT environment
 
-class Scoped e where
-    nullEnv :: e
-    addScope :: e -> e -> e
-
 scope :: MonadScoped e m => m a -> m a
 scope m = do
     e <- getEnv

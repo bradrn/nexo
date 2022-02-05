@@ -122,7 +122,6 @@ broadcast fn args
 evalExpr
     :: ( MonadEnv (f (Value e)) f
        , MonadScoped e f
-       , Scoped e
        , MonadError RuntimeError f
        )
     => CoreExpr -> f (Value e)
@@ -164,12 +163,10 @@ evalExpr = para \case
            ( MonadEnv (m (Value e)) m
            , MonadError RuntimeError m
            , MonadScoped e m
-           , Scoped e)
+           )
         => Value e -> ([Value e] -> m (Value e))
-    fromClosure (VClosure env' args x) vs = do
-        env <- getEnv
-        let innerEnv = env `addScope` env'
-        withEnv innerEnv $ do
+    fromClosure (VClosure env' args x) vs =
+        withEnv env' $ do
             for_ (zip args $ fmap (pure @m) vs) extend
             evalExpr x
     fromClosure (VPrimClosure (PrimClosure f)) vs = pure $ f vs
