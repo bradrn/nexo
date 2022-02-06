@@ -6,7 +6,8 @@
 #include <QString>
 #include <tuple>
 
-HsSheet::HsSheet()
+HsSheet::HsSheet(std::optional<QString> directory)
+    : directory(directory)
 {
     hsSheet = hsNewSheet();
 }
@@ -203,10 +204,19 @@ cleanup:
     return retval;
 }
 
-void HsSheet::reevaluate()
+bool HsSheet::reevaluate()
 {
-    hsEvalSheet(hsSheet);
-    emit reevaluated();
+    char *cdirectory;
+    if (directory) cdirectory = directory->toUtf8().data();
+    else cdirectory = nullptr;
+
+    if (hsEvalSheet(cdirectory, hsSheet))
+    {
+        emit reevaluated();
+        return true;
+    }
+    else
+        return false;
 }
 
 QHash<int, HsCell *> HsSheet::cells()

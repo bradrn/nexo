@@ -20,8 +20,8 @@ testEvalExpr' :: String -> Either Error (PType, Value GlobalEnv)
 testEvalExpr' xstr = do
     x <- maybe (Left ParseError) Right $ delocalise <$> parseMaybe pExpr xstr
     let c = Cell "test" Nothing (ValueCell "") x Invalidated
-        s = Sheet $ Map.singleton 0 c
-        Sheet s' = evalSheet s
+        s = Sheet [] Nothing $ Map.singleton 0 c
+    Sheet _ _ s' <- evalSheet undefined s
     case cellValue (s' Map.! 0) of
         ValuePresent t v -> Right (t, v)
         ValueError _ e -> Left e
@@ -32,8 +32,8 @@ testEvalExprs' xstrs = do
     cs <- for xstrs $ \(n, xstr) -> do
         x <- maybe (Left ParseError) Right $ delocalise <$> parseMaybe pExpr xstr
         pure $ Cell n Nothing (ValueCell "") x Invalidated
-    let s = Sheet $ Map.fromList $ zip [0..] cs
-        Sheet s' = evalSheet s
+    let s = Sheet [] Nothing $ Map.fromList $ zip [0..] cs
+    Sheet _ _ s' <- evalSheet undefined s
     case cellValue (s' Map.! 0) of
         ValuePresent t v -> Right (t, v)
         ValueError _ e -> Left e

@@ -45,6 +45,6 @@ add_executable(nexo-gui
 
 target_link_libraries(nexo-gui
   PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
-  ${NEXO_INTEROP_DIR}/nexo-interop.a ws2_32 psapi dbghelp winmm)
+  ${NEXO_INTEROP_DIR}/nexo-interop.a ws2_32 psapi dbghelp winmm shlwapi)
 
 qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})

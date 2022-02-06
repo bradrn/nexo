@@ -5,6 +5,7 @@
 module Interop where
 
 import Control.Monad ((<=<), zipWithM, (>=>))
+import Control.Monad.Trans.Except (runExceptT)
 import Data.Fix (Fix(Fix))
 import Data.IORef
 import Data.List (genericLength, genericIndex)
@@ -24,9 +25,10 @@ import Nexo.Render (renderType)
 import Nexo.Sheet
 import Nexo.Sheet.Parse (parseSheet)
 import Nexo.Sheet.Render (renderSheet)
+import Nexo.Sheet.Import (getImport)
 
 hsNewSheet :: IO (StablePtr (IORef Sheet))
-hsNewSheet = newStablePtr =<< newIORef (Sheet Map.empty)
+hsNewSheet = newStablePtr =<< newIORef (Sheet [] Nothing Map.empty)
 
 cFalse, cTrue :: CBool
 cFalse = 0
@@ -109,22 +111,29 @@ hsInsert k cptr sptr = do
     sref <- deRefStablePtr sptr
     modifyIORef' sref $ insert (fromIntegral k) cell
 
-hsEvalSheet :: StablePtr (IORef Sheet) -> IO ()
-hsEvalSheet ptr = do
+hsEvalSheet :: CString -> StablePtr (IORef Sheet) -> IO CBool
+hsEvalSheet cdir ptr = do
+    dir <-
+        if cdir == nullPtr
+        then pure Nothing
+        else Just <$> GHC.peekCString utf8 cdir
     ref <- deRefStablePtr ptr
-    modifyIORef' ref evalSheet
+    s <- readIORef ref
+    runExceptT (evalSheet (getImport dir) s) >>= \case
+        Left _ -> pure cFalse
+        Right s' -> cTrue <$ writeIORef ref s'
 
 hsCellIndices :: StablePtr (IORef Sheet) -> Ptr CInt -> IO (Ptr CInt)
 hsCellIndices ptr lptr = do
     ref <- deRefStablePtr ptr
-    Sheet s <- readIORef ref
+    Sheet _ _ s <- readIORef ref
     poke lptr $ fromIntegral $ length s
     newArray $ fromIntegral <$> Map.keys s
 
 hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState')
 hsQuery k ptr successPtr = do
     ref <- deRefStablePtr ptr
-    Sheet s <- readIORef ref
+    Sheet _ _ s <- readIORef ref
     case Map.lookup (fromIntegral k) s of
         Nothing -> poke successPtr cFalse >> newStablePtr Invalidated
         Just cl -> poke successPtr cTrue  >> newStablePtr (cellValue cl)
@@ -132,7 +141,7 @@ hsQuery k ptr successPtr = do
 hsQueryCell :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr Cell)
 hsQueryCell k ptr successPtr = do
     ref <- deRefStablePtr ptr
-    Sheet s <- readIORef ref
+    Sheet _ _ s <- readIORef ref
     case Map.lookup (fromIntegral k) s of
         Nothing -> poke successPtr cFalse >> newStablePtr (Cell "" Nothing (ValueCell "") (Fix ASTNull) Invalidated)
         Just cl -> poke successPtr cTrue  >> newStablePtr cl
@@ -253,7 +262,7 @@ foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
 foreign export ccall hsNothing :: IO (StablePtr (Maybe a))
 foreign export ccall hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr (AST, Widget) -> IO (StablePtr Cell)
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()
-foreign export ccall hsEvalSheet :: StablePtr (IORef Sheet) -> IO () 
+foreign export ccall hsEvalSheet :: CString -> StablePtr (IORef Sheet) -> IO CBool
 foreign export ccall hsCellIndices :: StablePtr (IORef Sheet) -> Ptr CInt -> IO (Ptr CInt)
 foreign export ccall hsQuery :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr ValueState')
 foreign export ccall hsQueryCell :: CInt -> StablePtr (IORef Sheet) -> Ptr CBool -> IO (StablePtr Cell)

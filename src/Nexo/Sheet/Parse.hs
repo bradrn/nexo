@@ -1,6 +1,10 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Nexo.Sheet.Parse where
 
 import Control.Applicative.Combinators (many)
+import Data.Bifunctor (second)
+import Data.Either (partitionEithers)
 import Data.Fix
 import Data.Functor ((<&>))
 import Data.Traversable (for)
@@ -13,7 +17,14 @@ import Nexo.Expr.Type.Annotated hiding (span)
 import qualified Nexo.Expr.Type.Annotated as Ann
 import Nexo.Sheet
 
-mkDef :: String -> ASTLoc -> Maybe Cell
+data Def = CellDef Cell | ImportDef [String]
+    deriving (Show)
+
+mkDef :: String -> ASTLoc -> Maybe Def
+mkDef _ (Fix (AnnLocF _ (ASTFun "Import" imports))) =
+    fmap ImportDef $ for imports $ \case
+        Fix (AnnLocF _ (ASTVar v)) -> Just v
+        _ -> Nothing
 mkDef s (Fix (AnnLocF _ (ASTFun f [Fix (AnnLocF _ var), Fix xloc]))) =
     let varInfo = case var of
             ASTVar v -> Just (v, Nothing)
@@ -22,7 +33,7 @@ mkDef s (Fix (AnnLocF _ (ASTFun f [Fix (AnnLocF _ var), Fix xloc]))) =
     in varInfo >>= \(name, type_) -> case f of
         "DefValue" ->
             let raw = extractSpan (Ann.span xloc) s
-            in Just Cell
+            in Just $ CellDef Cell
                 { cellName = name
                 , cellType = type_
                 , cellWidget = ValueCell raw
@@ -32,7 +43,7 @@ mkDef s (Fix (AnnLocF _ (ASTFun f [Fix (AnnLocF _ var), Fix xloc]))) =
         "DefList" -> case xloc of
             AnnLocF _ (ASTList xs) ->
                 let texts = xs <&> \(Fix (AnnLocF xspan _)) -> extractSpan xspan s
-                in Just Cell
+                in Just $ CellDef Cell
                     { cellName = name
                     , cellType = type_
                     , cellWidget = InputList texts
@@ -49,7 +60,7 @@ mkDef s (Fix (AnnLocF _ (ASTFun f [Fix (AnnLocF _ var), Fix xloc]))) =
                         Just (Fix (AnnLocF xspan _)) -> Just
                             (k, Left $ extractSpan xspan s)
                         _ -> Nothing
-                in raw <&> \raw' -> Cell
+                in raw <&> \raw' -> CellDef $ Cell
                     { cellName = name
                     , cellType = type_
                     , cellWidget = Table raw'
@@ -60,11 +71,21 @@ mkDef s (Fix (AnnLocF _ (ASTFun f [Fix (AnnLocF _ var), Fix xloc]))) =
         _ -> Nothing
 mkDef _ _ = Nothing
     
-parseCells :: String -> Maybe [Cell]
+parseCells :: String -> Maybe [Def]
 parseCells s = parseMaybe (many pExprInner) s >>= traverse (mkDef s)
 
 parseSheet :: String -> Maybe Sheet
-parseSheet = fmap (Sheet . toMap) . parseCells
+parseSheet = fmap (mkSheet . partitionDefs) . parseCells
   where
+    defToEither :: Def -> Either Cell [String]
+    defToEither (CellDef c) = Left c
+    defToEither (ImportDef is) = Right is
+
+    partitionDefs :: [Def] -> ([Cell], [String])
+    partitionDefs = second concat . partitionEithers . fmap defToEither
+
+    mkSheet :: ([Cell], [String]) -> Sheet
+    mkSheet (cells, imports) = Sheet imports Nothing (toMap cells)
+
     toMap :: [a] -> Map.Map Int a
     toMap = Map.fromList . zip [0..]

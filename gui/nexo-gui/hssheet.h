@@ -14,7 +14,7 @@ class HsSheet : public QWidget
 {
     Q_OBJECT
 public:
-    HsSheet();
+    HsSheet(std::optional<QString> directory = std::optional<QString>());
     ~HsSheet();
 
     HsSheet(const HsSheet&) = delete;
@@ -42,7 +42,7 @@ public:
 
     std::variant<std::monostate, QString, HsValue> queryCell(int key);
 
-    void reevaluate();
+    bool reevaluate();
 
     QHash<int, HsCell *> cells();
 
@@ -54,6 +54,7 @@ private:
 
     HsStablePtr hsSheet;
     bool disallowInserts = false;
+    std::optional<QString> directory;
 };
 
 #endif // HSSHEET_H

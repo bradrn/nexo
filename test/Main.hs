@@ -190,9 +190,11 @@ multis = testGroup "Multiple cells"
 renderer :: TestTree
 renderer = testGroup "Renderer"
     [ testProperty "tripping" $ property $ do
+        imports <- forAll $ Gen.list (Range.linear 0 5) $
+            (:) <$> Gen.alpha <*> Gen.string (Range.linear 0 10) Gen.alphaNum
         -- without resizing, the test takes a really long time
-        s <- forAll $ Gen.resize 20 $ Sheet . Map.fromList . zip [0..] <$> Gen.list (Range.linear 0 20) genCell
-        tripping s renderSheet parseSheet
+        sheet <- forAll $ Gen.resize 20 $ Map.fromList . zip [0..] <$> Gen.list (Range.linear 0 20) genCell
+        tripping (Sheet imports Nothing sheet) renderSheet parseSheet
     ]
 
 genCell :: MonadGen m => m Cell

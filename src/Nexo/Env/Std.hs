@@ -8,70 +8,72 @@ import Data.List (sort)
 import Nexo.Interpret
 import Data.Bifunctor (second)
 
-stdFnTs :: [(String, PType)]
-stdFnTs =
-    [ ("If"        , Forall ["a"] [] $ TFun [TBool, TVarR "a", TVarR "a"] (TVarR "a"))
-    , ("Mean"      , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
-    , ("Avg"       , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
-    , ("PopStdDev" , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
-    , ("Median"    , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
-    , ("Mode"      , Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u"))
-    , ("Sin"       , Forall [] []    $ TFun [TNum (ULeaf "rad")] (TNum Uno))
-    , ("Cos"       , Forall [] []    $ TFun [TNum (ULeaf "rad")] (TNum Uno))
-    , ("Tan"       , Forall [] []    $ TFun [TNum (ULeaf "rad")] (TNum Uno))
-    , ("InvSin"    , Forall [] []    $ TFun [TNum Uno] (TNum (ULeaf "rad")))
-    , ("InvCos"    , Forall [] []    $ TFun [TNum Uno] (TNum (ULeaf "rad")))
-    , ("InvTan"    , Forall [] []    $ TFun [TNum Uno] (TNum (ULeaf "rad")))
-    , ("Root"      , Forall [] []    $ TFun [TNum Uno, TNum Uno] (TNum Uno))
-    , ("Power"     , Forall [] []    $ TFun [TNum Uno, TNum Uno] (TNum Uno))
-    , ("="  , Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a"))
-    , ("<>" , Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a"))
-    , ("+"  , Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u"))
-    , ("-"  , Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u"))
-    , ("*"  , Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UMul (UVarR "u") (UVarR "v")))
-    , ("/"  , Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UDiv (UVarR "u") (UVarR "v")))
-    , (">"  , Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool)
-    , ("<"  , Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool)
-    , ("&&" , Forall [] []         $ TFun [TBool, TBool] TBool)
-    , ("||" , Forall [] []         $ TFun [TBool, TBool] TBool)
-    ]
-
-stdFnVals :: [(String, Value e)]
-stdFnVals = fmap (second $ VPrimClosure . PrimClosure)
-    [ ("If", \[cond, tcase, fcase] -> case cond of -- If logical Function
-        VBool True -> tcase
-        VBool False -> fcase
-        VNull -> VNull
-        _ -> error "evalFun: bug in typechecker")
-    , ("Mean"     , handleNull $ \[VList list]       -> VNum $ mean (map extractNum list))
-    , ("Avg"      , handleNull $ \[VList list]       -> VNum $ mean (map extractNum list))
-    , ("PopStdDev", handleNull $ \[VList list]       -> VNum $ popStdDev (map extractNum list))
-    , ("Median"   , handleNull $ \[VList list]       -> VNum $ median (map extractNum list))
-    , ("Mode"     , handleNull $ \[VList list]       -> VNum $ mode (map extractNum list))
-    , ("Sin"      , handleNull $ \[VNum n]           -> VNum $ sin n)
-    , ("Cos"      , handleNull $ \[VNum n]           -> VNum $ cos n)
-    , ("Tan"      , handleNull $ \[VNum n]           -> VNum $ tan n)
-    , ("InvSin"   , handleNull $ \[VNum n]           -> VNum $ asin n)
-    , ("InvCos"   , handleNull $ \[VNum n]           -> VNum $ acos n)
-    , ("InvTan"   , handleNull $ \[VNum n]           -> VNum $ atan n)
-    , ("Root"     , handleNull $ \[VNum n1, VNum n2] -> VNum $ n1**(1/n2))
-    , ("Power"    , handleNull $ \[VNum n1, VNum n2] -> VNum $ n1**n2)
-    , ("List"     , VList)                   -- List function used by Haskell for making lists
-    , ("GetField" , handleNull $ \case
+stdFns :: Map.Map String (PType, Value e)
+stdFns = Map.fromList $ fmap (second (second (VPrimClosure . PrimClosure)))
+    [ ("If",
+        ( Forall ["a"] [] $ TFun [TBool, TVarR "a", TVarR "a"] (TVarR "a")
+        , \[cond, tcase, fcase] -> case cond of
+            VBool True -> tcase
+            VBool False -> fcase
+            VNull -> VNull
+            _ -> error "evalFun: bug in typechecker"))
+    , ("Mean",
+       ( Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u")
+       , handleNull $ \[VList list]-> VNum $ mean (map extractNum list)))
+    , ("Avg",
+       ( Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u")
+       , handleNull $ \[VList list]-> VNum $ mean (map extractNum list)))
+    , ("PopStdDev" ,
+       ( Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u")
+       , handleNull $ \[VList list]-> VNum $ popStdDev (map extractNum list)))
+    , ("Median",
+       ( Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u")
+       , handleNull $ \[VList list]-> VNum $ median (map extractNum list)))
+    , ("Mode",
+       ( Forall [] ["u"] $ TFun [TList (TNum $ UVarR "u")] (TNum $ UVarR "u")
+       , handleNull $ \[VList list]-> VNum $ mode (map extractNum list)))
+    , ("Sin",
+       ( Forall [] [] $ TFun [TNum (ULeaf "rad")] (TNum Uno)
+       , handleNull $ \[VNum n]-> VNum $ sin n))
+    , ("Cos",
+       ( Forall [] [] $ TFun [TNum (ULeaf "rad")] (TNum Uno)
+       , handleNull $ \[VNum n]-> VNum $ cos n))
+    , ("Tan",
+       ( Forall [] [] $ TFun [TNum (ULeaf "rad")] (TNum Uno)
+       , handleNull $ \[VNum n]-> VNum $ tan n))
+    , ("InvSin",
+       ( Forall [] [] $ TFun [TNum Uno] (TNum (ULeaf "rad"))
+       , handleNull $ \[VNum n]-> VNum $ asin n))
+    , ("InvCos",
+       ( Forall [] [] $ TFun [TNum Uno] (TNum (ULeaf "rad"))
+       , handleNull $ \[VNum n]-> VNum $ acos n))
+    , ("InvTan",
+       ( Forall [] [] $ TFun [TNum Uno] (TNum (ULeaf "rad"))
+       , handleNull $ \[VNum n]-> VNum $ atan n))
+    , ("Root",
+       ( Forall [] [] $ TFun [TNum Uno, TNum Uno] (TNum Uno)
+       , handleNull $ \[VNum n1, VNum n2] -> VNum $ n1**(1/n2)))
+    , ("Power",
+       ( Forall [] [] $ TFun [TNum Uno , TNum Uno] (TNum Uno)
+       , handleNull $ \[VNum n1, VNum n2] -> VNum $ n1**n2))
+    , ("List",
+       (error "std: bug in typechecker: attempted to get type of List()", VList))
+    , ("GetField" ,
+       (error "std: bug in typechecker: attempted to get type of GetField(,)", handleNull $ \case
           [VRecord r, VText f] | Just v <- Map.lookup f r -> v
-          [VTable  r, VText f] | Just v <- Map.lookup f r -> VList v
+          [VTable r, VText f] | Just v <- Map.lookup f r -> VList v
           _ -> error "GetField(,): bug in typechecker"
-      )
-    , ("+" , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 + i2)
-    , ("-" , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 - i2)
-    , ("*" , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 * i2)
-    , ("/" , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 / i2)
-    , ("=" , handleNull $ \[v1     , v2     ] -> VBool $ v1 == v2)
-    , ("<>", handleNull $ \[v1     , v2     ] -> VBool $ v1 /= v2)
-    , (">" , handleNull $ \[VNum i1, VNum i2] -> VBool $ i1 > i2)
-    , ("<" , handleNull $ \[VNum i1, VNum i2] -> VBool $ i1 < i2)
-    , ("&&", handleNull $ \[VBool p, VBool q] -> VBool $ p && q)
-    , ("||", handleNull $ \[VBool p, VBool q] -> VBool $ p || q)
+      ))
+    , ("="  , (Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a")                                        , handleNull $ \[v1     , v2     ] -> VBool $ v1 == v2))
+    , ("<>" , (Forall [] ["a"]      $ TFun [TVarR "a", TVarR "a"] (TVarR "a")                                        , handleNull $ \[v1     , v2     ] -> VBool $ v1 /= v2))
+    , ("+"  , (Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u")                   , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 + i2))
+    , ("-"  , (Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] (TNum $ UVarR "u")                   , handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 - i2))
+    , ("*"  , (Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UMul (UVarR "u") (UVarR "v")), handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 * i2))
+    , ("/"  , (Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UDiv (UVarR "u") (UVarR "v")), handleNull $ \[VNum i1, VNum i2] -> VNum $ i1 / i2))
+    , (">"  , (Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool                                , handleNull $ \[VNum i1, VNum i2] -> VBool $ i1 > i2))
+    , ("<"  , (Forall [] ["u"]      $ TFun [TNum $ UVarR "u", TNum $ UVarR "u"] TBool                                , handleNull $ \[VNum i1, VNum i2] -> VBool $ i1 < i2))
+    , ("&&" , (Forall [] []         $ TFun [TBool, TBool] TBool                                                      , handleNull $ \[VBool p, VBool q] -> VBool $ p && q))
+    , ("||" , (Forall [] []         $ TFun [TBool, TBool] TBool                                                      , handleNull $ \[VBool p, VBool q] -> VBool $ p || q))
     ]
 
 handleNull :: ([Value e] -> Value e) -> [Value e] -> Value e

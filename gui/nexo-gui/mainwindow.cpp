@@ -13,6 +13,7 @@
 #include <QMdiSubWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -99,7 +100,16 @@ void MainWindow::openSheet()
         delete sheet;
         sheet = *openedSheet;
 
-        sheet->reevaluate();
+        if (!sheet->reevaluate())
+        {
+            QMessageBox::critical(
+                this,
+                tr("Nexo"),
+                tr("Error in imports"),
+                QMessageBox::Ok,
+                QMessageBox::Ok);
+            return;
+        }
         sheet->disableInserts();
 
         QHash<int, HsCell *> cells = sheet->cells();

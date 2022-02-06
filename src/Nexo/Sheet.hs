@@ -28,8 +28,8 @@ import Control.Monad.Except (runExceptT, MonadError(..), ExceptT(..), withExcept
 import Control.Monad.State.Strict
     ( gets, modify', State, StateT (..), MonadState(..) )
 import Control.Monad.Trans (lift)
-import Data.Bifunctor (second)
 import Data.Fix (Fix(Fix))
+import Data.Foldable (asum)
 import Data.Functor ((<&>))
 import Data.Functor.Identity (Identity(Identity))
 import Data.Set (unions)
@@ -78,14 +78,19 @@ data Cell = Cell
     , cellValue :: ValueState GlobalEnv
     } deriving (Show, Eq)
 
-newtype Sheet = Sheet { getSheet :: Map.Map Int Cell }
+data Sheet = Sheet
+    { sheetImports :: [String]
+    , sheetImportsCached :: Maybe [Map.Map String (PType, Value GlobalEnv)]
+    , getSheet :: Map.Map Int Cell
+    }
     deriving (Show, Eq)
 
 insert :: Int -> Cell -> Sheet -> Sheet
-insert k v = Sheet . Map.insert k v . getSheet
+insert k v s@Sheet{getSheet=sheet} = s { getSheet = Map.insert k v sheet }
 
 data GlobalEnv = GlobalEnv
-    { globalCells :: Map.Map Int Cell
+    { imports :: [Map.Map String (PType, Value GlobalEnv)]
+    , globalCells :: Map.Map Int Cell
     , localTypes :: [(String, PType)]
     , localValues :: [(String, ExceptT RuntimeError Eval Value')]
     }
@@ -94,7 +99,7 @@ instance Show GlobalEnv where
 
 instance Substitutable GlobalEnv where
     apply s GlobalEnv{..} =
-        flip (GlobalEnv globalCells) localValues <$>  -- assume other cells have no frees
+        flip (GlobalEnv imports globalCells) localValues <$>  -- assume other cells have no frees
             traverse (\(n,t) -> (n,) <$> apply s t) localTypes
     frees GlobalEnv{localTypes=locals} =
         let (tfs, ufs) = unzip $ frees . snd <$> locals
@@ -123,10 +128,14 @@ instance MonadEnv PType (ExceptT TypeError Eval) where
     lookupName n = do
         env <- getEnv
         case lookup n (localTypes env) of
-            Nothing -> lift (cacheByName n) >>= \case
-                Nothing -> throwError $ UnknownName n
-                Just (t, _) -> pure t
             Just t -> pure t
+            Nothing -> lift (cacheByName n) >>= \case
+                Just (t, _) -> pure t
+                Nothing -> lift (lookupImports n) >>= \case
+                    Just (t, _) -> pure t
+                    Nothing -> case Map.lookup n stdFns of
+                        Just (t, _) -> pure t
+                        Nothing -> throwError $ UnknownName n
     extend b = lift $ modify' $ \e@GlobalEnv{localTypes} ->
         e{localTypes=b:localTypes}
 
@@ -134,11 +143,15 @@ instance MonadEnv (ExceptT RuntimeError Eval Value') (ExceptT RuntimeError Eval)
     lookupName n = do
         env <- getEnv
         case lookup n (localValues env) of
+            Just v -> pure v
             Nothing -> lift (cacheByName n) >>= \case
-                Nothing -> error "lookupName: bug in typechecker"
                 Just (_, Left e) -> throwError e
                 Just (_, Right v) -> pure $ pure v
-            Just v -> pure v
+                Nothing -> lift (lookupImports n) >>= \case
+                    Just (_, v) -> pure $ pure v
+                    Nothing -> case Map.lookup n stdFns of
+                        Just (_, v) -> pure $ pure v
+                        Nothing -> error "lookupName: bug in typechecker"
     extend b = lift $ modify' $ \e@GlobalEnv{localValues} ->
         e{localValues=b:localValues}
 
@@ -147,6 +160,9 @@ instance MonadSubst (ExceptT TypeError Eval) where
       case apply subst e of
           Just e' -> (Right (), e')
           Nothing -> (Left KindMismatch, e)
+
+lookupImports :: String -> Eval (Maybe (PType, Value GlobalEnv))
+lookupImports n = asum . fmap (Map.lookup n) <$> gets imports
 
 cacheExpr :: Int -> Eval (Maybe ValueState')
 cacheExpr ident = gets (Map.lookup ident . globalCells) >>= \case
@@ -179,17 +195,24 @@ cacheByName name = do
             _ -> Nothing
         Nothing -> pure Nothing
 
-evalSheet :: Sheet -> Sheet
-evalSheet (Sheet s) = Sheet $
-    globalCells $ snd $ runEval (go $ invalidate s) initEnv
+evalSheet
+    :: Applicative m
+    => (String -> m (Map.Map String (PType, Value GlobalEnv)))
+    -> Sheet
+    -> m Sheet
+evalSheet getImport (Sheet is cached s) = do
+    maybe (traverse getImport is) pure cached <&> \is' ->
+        Sheet is (Just is')
+            (globalCells $ snd $ runEval (go $ invalidate s) (initEnv is'))
   where
     invalidate :: Map.Map Int Cell -> Map.Map Int Cell
     invalidate = Map.map $ \c -> c { cellValue = Invalidated }
 
-    initEnv = GlobalEnv
-        { globalCells = Map.empty
-        , localTypes = stdFnTs
-        , localValues = second pure <$> stdFnVals
+    initEnv is' = GlobalEnv
+        { imports = is'
+        , globalCells = Map.empty
+        , localTypes = []
+        , localValues = []
         }
 
     go :: Map.Map Int Cell -> Eval ()
