@@ -13,7 +13,6 @@ import Nexo.Expr.Type
 
 renderStep :: ASTF String -> String
 renderStep (ASTLit lit) = renderLit lit
-renderStep (ASTList ss) = '[' : intercalate ", " ss ++ "]"
 renderStep (ASTRecord r rec ss) =
     let r' = case r of
             Recursive -> "rec"

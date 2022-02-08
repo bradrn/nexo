@@ -48,7 +48,7 @@ hsParseLiteralList clen cinput successPtr = do
     case traverse (parseMaybe pLit) inputs of
         Nothing -> poke successPtr cFalse >> newStablePtr (Fix ASTNull, ValueCell "")
         Just values ->
-            let xp = Fix . ASTList $ Fix . ASTLit <$> values
+            let xp = Fix . ASTFun "List" $ Fix . ASTLit <$> values
             in poke successPtr cTrue >> newStablePtr (xp, InputList inputs)
 
 hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString) -> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (AST, Widget))
@@ -83,7 +83,7 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
 
     mkColumnExpr :: Maybe AST -> Maybe [AST] -> Maybe AST
     mkColumnExpr (Just x) _         = Just x
-    mkColumnExpr _       (Just col) = Just $ Fix $ ASTList col
+    mkColumnExpr _       (Just col) = Just $ Fix $ ASTFun "List" col
     mkColumnExpr Nothing Nothing    = Nothing
 
     mkColumnEither :: Maybe String -> [String] -> Either String [String]

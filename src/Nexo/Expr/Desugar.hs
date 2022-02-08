@@ -14,7 +14,6 @@ import Nexo.Expr.Type
 
 depends :: ASTF (Set String) -> Set String
 depends (ASTLit _lit) = Set.empty
-depends (ASTList sets) = fold sets
 depends (ASTRecord Nonrecursive r _ss) = fold r
 depends (ASTRecord Recursive r _ss) = fold r \\ Map.keysSet r
 depends (ASTVar v) = Set.singleton v
@@ -46,7 +45,6 @@ topoSort = go . restrictToTable
 
 desugarStep :: ASTF (Set String, Expr) -> Expr
 desugarStep (ASTLit lit) = Fix $ XAtom $ Lit lit
-desugarStep (ASTList xs) = Fix $ XNamedFunApp "List" $ snd <$> xs
 desugarStep (ASTRecord rty r _ss) = Fix $ XRecord rty (snd <$> r) (topoSort $ fst <$> r)
 desugarStep (ASTVar s) = Fix $ XAtom $ Var s
 desugarStep (ASTLet v t (_, xv) (_, x)) = Fix $ XFunApp

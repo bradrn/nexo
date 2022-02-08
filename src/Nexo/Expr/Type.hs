@@ -85,7 +85,6 @@ data Recursivity = Nonrecursive | Recursive
 
 data ASTF r
     = ASTLit Literal
-    | ASTList [r]
     | ASTRecord Recursivity (Map.Map String r) [String]
     | ASTVar String
     | ASTLet String (Maybe PType) r r

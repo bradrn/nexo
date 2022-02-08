@@ -57,41 +57,41 @@ literals = testGroup "Literals"
 values :: TestTree
 values = testGroup "Values"
     [ testCase "Lists" $ do
-        testEvalExpr "[1,2,3]"    @?= Just (Forall [] [] $ TList (TNum Uno), VList (VNum <$> [1,2,3]))
-        testEvalExpr "[1,2,True]" @?= Nothing
+        testEvalExpr "List(1,2,3)"    @?= Just (Forall [] [] $ TList (TNum Uno), VList (VNum <$> [1,2,3]))
+        testEvalExpr "List(1,2,True)" @?= Nothing
     , testCase "Records" $ do
         testEvalExpr "(x: 1, y: True)" @?= Just
             ( Forall [] [] $ TRecord (Map.fromList [("x", TNum Uno), ("y", TBool)])
             , VRecord (Map.fromList [("x", VNum 1  ), ("y", VBool True)])
             )
         testEvalExpr "(x: 1, y: True).x" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
-        testEvalExpr "(x: [1,2,3], y: True).x" @?= Just (Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1, 2, 3])
+        testEvalExpr "(x: List(1,2,3), y: True).x" @?= Just (Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1, 2, 3])
     , testCase "Tables" $ do
-        testEvalExpr "Table(rec (x: [1,2,3], y: (x+1)))" @?= Just
+        testEvalExpr "Table(rec (x: List(1,2,3), y: (x+1)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno), ("y", TNum Uno)]
             , VTable $ Map.fromList [("x", VNum <$> [1,2,3]), ("y", VNum <$> [2,3,4])]
             )
-        testEvalExpr "Table(rec (x: (y-1), y: [2,3,4]))" @?= Just
+        testEvalExpr "Table(rec (x: (y-1), y: List(2,3,4)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno), ("y", TNum Uno)]
             , VTable $ Map.fromList [("x", VNum <$> [1,2,3]), ("y", VNum <$> [2,3,4])]
             )
         testEvalExpr "Table(rec (x: 1, y: (x+1)))" @?= Nothing
-        testEvalExpr "Table(rec (x: (y-1), y: [2,3,4])).x" @?= Just ( Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1,2,3])
-        testEvalExpr "Table(rec (x: [[1]], y: (x+1)))" @?= Just
+        testEvalExpr "Table(rec (x: (y-1), y: List(2,3,4))).x" @?= Just ( Forall [] [] $ TList (TNum Uno), VList $ VNum <$> [1,2,3])
+        testEvalExpr "Table(rec (x: List(List(1)), y: (x+1)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList
                   [ ("x", TList (TNum Uno))
                   , ("y", TList (TNum Uno))
                   ]
             , VTable $ Map.fromList [("x",[VList [VNum 1]]), ("y",[VList [VNum 2]])]
             )
-        testEvalExpr "Table(rec (y: (z+1), z: [[1]]))" @?= Just
+        testEvalExpr "Table(rec (y: (z+1), z: List(List(1))))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList
                   [ ("y", TList (TNum Uno))
                   , ("z", TList (TNum Uno))
                   ]
             , VTable $ Map.fromList [("y",[VList [VNum 2]]), ("z",[VList [VNum 1]])]
             )
-        testEvalExpr "Table((x: [1, Null]))" @?= Just
+        testEvalExpr "Table((x: List(1, Null)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList [("x", TNum Uno)]
             , VTable $ Map.fromList [("x", [VNum 1, VNull])]
             )
@@ -103,15 +103,15 @@ functions = testGroup "Functions"
         testEvalExpr "If(True , 1, 2)" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "If(False, 1, 2)" @?= Just (Forall [] [] $ TNum Uno, VNum 2)
         testEvalExpr "Power(2, 8)" @?= Just (Forall [] [] $ TNum Uno, VNum 256)
-        testEvalExpr "Mean([1,2,3,4,5])" @?= Just (Forall [] [] $ TNum Uno, VNum 3)
+        testEvalExpr "Mean(List(1,2,3,4,5))" @?= Just (Forall [] [] $ TNum Uno, VNum 3)
     , testCase "Operators" $ do
         testEvalExpr "1 + 1" @?= Just (Forall [] [] $ TNum Uno, VNum 2)
         testEvalExpr "2 * 3" @?= Just (Forall [] [] $ TNum (UMul Uno Uno), VNum 6)
         testEvalExpr "5 < 1" @?= Just (Forall [] [] TBool, VBool False)
     , testCase "Broadcasting" $ do
-        testEvalExpr "10 + [1,2,3]" @?= Just (Forall [] [] $ TList $ TNum Uno, VList $ VNum <$> [11,12,13])
-        testEvalExpr "[10,20,30] + [1,2,3]" @?= Just (Forall [] [] $ TList $ TNum Uno, VList $ VNum <$> [11,22,33])
-        testEvalExpr "If([True,False], [[1,2],[3,4]], [10,20])" @?= Just
+        testEvalExpr "10 + List(1,2,3)" @?= Just (Forall [] [] $ TList $ TNum Uno, VList $ VNum <$> [11,12,13])
+        testEvalExpr "List(10,20,30) + List(1,2,3)" @?= Just (Forall [] [] $ TList $ TNum Uno, VList $ VNum <$> [11,22,33])
+        testEvalExpr "If(List(True,False), List(List(1,2),List(3,4)), List(10,20))" @?= Just
             ( Forall [] [] $ TList $ TList $ TNum Uno
             , VList [VList $ VNum <$> [1,20], VList $ VNum <$> [3,20]])
     , testCase "Null handling" $ do
@@ -122,8 +122,8 @@ functions = testGroup "Functions"
     , testCase "Ascription" $ do
         testEvalExpr "1 : Num" @?= Just (Forall [] [] $ TNum Uno, VNum 1)
         testEvalExpr "1 : Bool" @?= Nothing
-        testEvalExpr "[True,False] : List(Bool)" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
-        testEvalExpr "[True,False] : Bool" @?= Nothing
+        testEvalExpr "List(True,False) : List(Bool)" @?= Just (Forall [] [] $ TList TBool, VList $ VBool <$> [True,False])
+        testEvalExpr "List(True,False) : Bool" @?= Nothing
         testEvalExpr "(x: 1, y: True) : (x: Num, y: Bool)" @?= Just
             ( Forall [] [] $ TRecord (Map.fromList [("x", TNum Uno), ("y", TBool)])
             , VRecord (Map.fromList [("x", VNum 1  ), ("y", VBool True)])
@@ -153,7 +153,7 @@ units = testGroup "Units"
         testEvalExpr "1 m"       @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1)
         testEvalExpr "1 km"      @?= Just (Forall [] [] $ TNum (ULeaf "km"), VNum 1)
         testEvalExpr "1 m^-1"    @?= Just (Forall [] [] $ TNum (UExp (ULeaf "m") (-1)), VNum 1)
-        testEvalExpr "[1,2,3] s" @?= Just (Forall [] [] $ TList (TNum (ULeaf "s")), VList (VNum <$> [1,2,3]))
+        testEvalExpr "List(1,2,3) s" @?= Just (Forall [] [] $ TList (TNum (ULeaf "s")), VList (VNum <$> [1,2,3]))
     , testCase "Unit computation" $ do
         testEvalExpr "(1 km) : Num<m>" @?= Just (Forall [] [] $ TNum (ULeaf "m"), VNum 1000)
         testEvalExpr "1 km : Num<s>" @?= Nothing
@@ -163,11 +163,11 @@ units = testGroup "Units"
         testEvalExpr "1 s + 1 h" @?= Just (Forall [] [] $ TNum (ULeaf "s"), VNum 3601)
         testEvalExpr "1 m + 2 s" @?= Nothing
         testEvalExpr "1 m * 2 s" @?= Just (Forall [] [] $ TNum (UMul (ULeaf "m") (ULeaf "s")), VNum 2)
-        testEvalExpr "[1,2,3] m + [4,5,6] km" @?= Just (Forall [] [] (TList (TNum (ULeaf "m"))),VList [VNum 4001,VNum 5002,VNum 6003])
-        testEvalExpr "[1 m, 2 km]" @?= Just (Forall [] [] (TList (TNum (ULeaf "m"))),VList [VNum 1,VNum 2000])
+        testEvalExpr "List(1,2,3) m + List(4,5,6) km" @?= Just (Forall [] [] (TList (TNum (ULeaf "m"))),VList [VNum 4001,VNum 5002,VNum 6003])
+        testEvalExpr "List(1 m, 2 km)" @?= Just (Forall [] [] (TList (TNum (ULeaf "m"))),VList [VNum 1,VNum 2000])
         fst <$> testEvalExpr "x -> (x+1)" @?= Just (Forall [] [] (TFun [TNum Uno] (TNum Uno)))
         fst <$> testEvalExpr "x -> (x+1m)" @?= Just (Forall [] [] (TFun [TNum (ULeaf "m")] (TNum (ULeaf "m"))))
-        testEvalExpr "Table(rec (x: [1] m, y: (1 km + x)))" @?= Just
+        testEvalExpr "Table(rec (x: List(1) m, y: (1 km + x)))" @?= Just
             ( Forall [] [] $ TTable $ Map.fromList
                   [ ("x", TNum (ULeaf "m"))
                   , ("y", TNum (UMul (ULeaf "m") (UFactor 1000)))
@@ -224,7 +224,7 @@ genWidgetWithExpr = Gen.frequency
               )
       )
     , (1, Gen.list (Range.linear 0 50) genExpr <&>
-          \l -> (Fix $ ASTList l, InputList $ renderExpr <$> l))
+          \l -> (Fix $ ASTFun "List" l, InputList $ renderExpr <$> l))
     ]
 
 -- NB. these ASTs do not in general typecheck!
@@ -234,8 +234,7 @@ genExpr = Gen.recursive Gen.choice
     , Fix . ASTVar <$> genIdentifier
     , pure $ Fix ASTNull
     ]
-    [ Fix . ASTList <$> Gen.list (Range.linear 0 50) genExpr
-    , mkTable
+    [ mkTable
         <$> Gen.element [Nonrecursive, Recursive]
         <*> genTable
     , Gen.subterm genExpr $ Fix . ASTFun "Table" . pure
@@ -264,14 +263,14 @@ mkTable :: Recursivity -> [(String, Either AST [AST])] -> AST
 mkTable rec r = Fix $ ASTFun "Table" [Fix $ ASTRecord rec (mkCol <$> Map.fromList r) (fst <$> r)]
   where
     mkCol :: Either AST [AST] -> AST
-    mkCol = either id (Fix . ASTList)
+    mkCol = either id (Fix . ASTFun "List")
 
 genTable :: MonadGen m => m [(String, Either AST [AST])]
 genTable = do
     rows <- Gen.int $ Range.linear 0 100
     m <- Gen.map (Range.linear 0 30) $ (,)
         <$> genIdentifier
-        <*> Gen.either (Gen.filterT (/=Fix (ASTList [])) genExpr) (Gen.list (Range.singleton rows) genExpr)
+        <*> Gen.either (Gen.filterT (/=Fix (ASTFun "List" [])) genExpr) (Gen.list (Range.singleton rows) genExpr)
     Gen.shuffle $ Map.toList m
 
 genType :: MonadGen m => m PType

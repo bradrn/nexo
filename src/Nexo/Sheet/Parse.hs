@@ -41,7 +41,7 @@ mkDef s (Fix (AnnLocF _ (ASTFun f [Fix (AnnLocF _ var), Fix xloc]))) =
                 , cellValue = Invalidated
                 }
         "DefList" -> case xloc of
-            AnnLocF _ (ASTList xs) ->
+            AnnLocF _ (ASTFun "List" xs) ->
                 let texts = xs <&> \(Fix (AnnLocF xspan _)) -> extractSpan xspan s
                 in Just $ CellDef Cell
                     { cellName = name
@@ -55,7 +55,7 @@ mkDef s (Fix (AnnLocF _ (ASTFun f [Fix (AnnLocF _ var), Fix xloc]))) =
             AnnLocF _ (ASTFun "Table" [Fix (AnnLocF _ (ASTRecord Recursive r order))]) ->
                 let raw :: Maybe [(String, Either String [String])]
                     raw = for order $ \k -> case Map.lookup k r of
-                        Just (Fix (AnnLocF _ (ASTList xs))) -> Just
+                        Just (Fix (AnnLocF _ (ASTFun "List" xs))) -> Just
                             (k, Right $ xs <&> \(Fix (AnnLocF xspan _)) -> extractSpan xspan s)
                         Just (Fix (AnnLocF xspan _)) -> Just
                             (k, Left $ extractSpan xspan s)

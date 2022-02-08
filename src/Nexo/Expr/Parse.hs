@@ -43,9 +43,8 @@ lexeme = L.lexeme sc
 symbol :: String -> Parser String
 symbol = L.symbol sc
 
-paren, sqparen :: Parser a -> Parser a
-paren   = between (symbol "(") (symbol ")")
-sqparen = between (symbol "[") (symbol "]")
+paren :: Parser a -> Parser a
+paren = between (symbol "(") (symbol ")")
 
 pIdentifier :: Parser String
 pIdentifier = lexeme $ (:) <$> letterChar <*> many (alphaNumChar <|> oneOf "_")
@@ -140,7 +139,6 @@ pTermInner :: Parser (ASTF ASTLoc)
 pTermInner = choice
     [ pLet
     , ASTNull <$ symbol "Null"
-    , ASTList <$> sqparen (pExprInner `sepBy` symbol ",")
     , pLam
     , uncurry3 ASTRecord <$> pRecursivity <*> try (paren (pOrderedRecordSpec pExprInner))
     , try $ ASTFun <$> pIdentifier <*> paren (pExprInner `sepBy` symbol ",")
