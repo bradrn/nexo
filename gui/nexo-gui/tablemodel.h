@@ -38,8 +38,11 @@ private:
     static const int prefaceRows = 2;
     QStringList headers;
     QVector<QString *> formulae; // nullptr for columns lacking a formula
-    QVector<QStringList> columns;
+    QMap<int, QStringList> columns;
     QHash<QString, QVector<HsValue *>> values;
+
+    int rows = 128;
+    int cols = 128;
 
     void doSetData(const QModelIndex &index, const QVariant &value);
 };

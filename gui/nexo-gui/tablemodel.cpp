@@ -13,8 +13,7 @@ TableModel::TableModel(int key, HsSheet *sheet, QObject *parent)
     // initialise table data
     headers = QStringList("Column1");
     formulae = QVector<QString *>(1, nullptr);
-    columns = QVector<QStringList>();
-    columns.append(QStringList("0"));
+    columns = QMap<int,QStringList>({std::pair(0, QStringList("0"))});
 
     connect(sheet, &HsSheet::reevaluated, this, &TableModel::requery);
 
@@ -31,22 +30,18 @@ void TableModel::loadValueFrom(const HsCell &cell)
 {
     emit layoutAboutToBeChanged();
 
-    int rows = cell.rows();
-    int cols = cell.cols();
+    rows = cell.rows();
+    cols = cell.cols();
 
     headers = QStringList();
     formulae = QVector<QString *>(cols, nullptr);
-    columns = QVector<QStringList>(cols, QStringList());
+    columns = QMap<int, QStringList>({std::pair(cols, QStringList())});
 
     for (int col=0; col<cols; ++col)
     {
         headers.append("");
-        QStringList &column = columns[col];
         for (int row=0; row<rows; ++row)
-        {
-            if (row>=2) column.append("");
             doSetData(createIndex(row, col), cell.exprAt(row, col));
-        }
     }
 
     requery();
@@ -56,13 +51,12 @@ void TableModel::loadValueFrom(const HsCell &cell)
 
 int TableModel::rowCount(const QModelIndex &parent) const
 {
-    if (columns.empty()) return 1;
-    return columns[0].count()+prefaceRows;
+    return rows+prefaceRows;
 }
 
 int TableModel::columnCount(const QModelIndex &parent) const
 {
-    return headers.count();
+    return cols;
 }
 
 QVariant TableModel::data(const QModelIndex &index, int role) const
@@ -71,9 +65,6 @@ QVariant TableModel::data(const QModelIndex &index, int role) const
         return QVariant();
 
     if (index.column() >= headers.count())
-        return QVariant();
-
-    if (index.row() >= columns[0].count()+prefaceRows)
         return QVariant();
 
     if (role == Qt::DisplayRole || role == Qt::EditRole)
@@ -89,17 +80,19 @@ QVariant TableModel::data(const QModelIndex &index, int role) const
         }
     }
 
+    int itemIndex = index.row() - prefaceRows;
     if (role == Qt::DisplayRole)
     {
         QString label = headers[index.column()];
-        QVector<HsValue *> column = values[label];
-        int itemIndex = index.row() - prefaceRows;
+        QVector<HsValue *> column = values.value(label);
         if (itemIndex < column.count())
             return column[itemIndex]->render();
     }
     else if (role == Qt::EditRole)
     {
-        return columns[index.column()][index.row()-prefaceRows];
+        QStringList column = columns.value(index.column());
+        if (itemIndex < column.count())
+            return column[itemIndex];
     }
 
     return QVariant();
@@ -136,9 +129,7 @@ Qt::ItemFlags TableModel::flags(const QModelIndex &index) const
 bool TableModel::setData(const QModelIndex &index, const QVariant &value, int role)
 {
     if (index.isValid() &&
-            role == Qt::EditRole &&
-            index.column() < headers.count() &&
-            index.row() < columns[0].count()+prefaceRows)
+            role == Qt::EditRole)
     {
         doSetData(index, value);
 
@@ -155,45 +146,30 @@ bool TableModel::insertRows(int row, int count, const QModelIndex &parent)
         return false;
 
     beginInsertRows(QModelIndex(), row, row+count-1);
-
-    for (int i=0; i<headers.count(); ++i)
-    {
-        QStringList &column = columns[i];
-        for (int j=0; j<count; ++j)
-            column.insert(row-prefaceRows, "");
-    }
-
+    ++rows;
     invalidate();
-
     endInsertRows();
+
     return true;
 }
 
 bool TableModel::insertColumns(int column, int count, const QModelIndex &parent)
 {
     beginInsertColumns(QModelIndex(), column, column+count-1);
-
-    for (int i=column; i<column+count; ++i)
-    {
-        headers.insert(i, tr("Column%1").arg(i+1));
-        formulae.insert(i, nullptr);
-
-        int collen = columns[0].count();
-        QStringList newcol = QStringList();
-        for (int j=0; j<collen; ++j)
-            newcol.append("");
-        columns.insert(i, newcol);
-    }
-
+    ++cols;
     invalidate();
-
     endInsertColumns();
+
     return true;
 }
 
 void TableModel::invalidate()
 {
-    sheet->insertTable(key, name, headers, formulae, columns);
+    QVector<QStringList> denseColumns = QVector<QStringList>();
+    denseColumns.reserve(headers.count());
+    for (auto i = columns.constBegin(); i != columns.constEnd(); ++i)
+        denseColumns.append(*i);
+    sheet->insertTable(key, name, headers, formulae, denseColumns);
 }
 
 void TableModel::requery()
@@ -213,9 +189,40 @@ void TableModel::requery()
 
 void TableModel::doSetData(const QModelIndex &index, const QVariant &value)
 {
+    // if column does not exist, create it
+    int col = index.column();
+    bool neednewheader = false;
+    if (col >= headers.count())
+    {
+        headers.reserve(col+1);
+        for (int j=headers.count(); j<=col; ++j)
+            headers.append("");
+        neednewheader = true;
+    }
+    if (col >= formulae.count())
+    {
+        formulae.reserve(col+1);
+        for (int j=formulae.count(); j<=col; ++j)
+            formulae.append(nullptr);
+    }
+    if (col > *std::max_element(columns.keyBegin(), columns.keyEnd()))
+    {
+        columns.insert(col, QStringList());
+    }
+
+    // replace header if needed
+
     if (index.row() == 0)
+    {
         headers.replace(index.column(), value.toString());
-    else if (index.row() == 1)
+        return;
+    }
+    if (neednewheader)
+        setData(createIndex(0, col), tr("Column%1").arg(col+1));
+
+    // replace content
+
+    if (index.row() == 1)
     {
         QString valueStr = value.toString();
         if (valueStr.isEmpty())
@@ -224,5 +231,17 @@ void TableModel::doSetData(const QModelIndex &index, const QVariant &value)
             formulae.replace(index.column(), new QString(valueStr));
     }
     else
-        columns[index.column()].replace(index.row()-prefaceRows, value.toString());
+    {
+        QStringList &column = columns[index.column()];
+        int i = index.row()-prefaceRows;
+        if (i < column.count())
+            column.replace(index.row()-prefaceRows, value.toString());
+        else
+        {
+            column.reserve(i+1);
+            for (int j=column.count(); j<i; ++j)
+                column.append("");
+            column.append(value.toString());
+        }
+    }
 }
