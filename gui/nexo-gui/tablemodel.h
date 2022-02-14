@@ -36,9 +36,14 @@ private:
     HsSheet *sheet;
 
     static const int prefaceRows = 2;
-    QStringList headers;
-    QVector<QString *> formulae; // nullptr for columns lacking a formula
-    QMap<int, QStringList> columns;
+    struct Column
+    {
+        QString header;
+        QString *formula; // nullptr for columns lacking a formula
+        QStringList cells;
+    };
+
+    QMap<int, Column> contents;
     QHash<QString, QVector<HsValue *>> values;
 
     int rows = 128;

@@ -45,17 +45,17 @@
 <context>
     <name>TableModel</name>
     <message>
-        <location filename="tablemodel.cpp" line="113"/>
+        <location filename="tablemodel.cpp" line="115"/>
         <source>Header</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="tablemodel.cpp" line="115"/>
+        <location filename="tablemodel.cpp" line="117"/>
         <source>Formula</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="tablemodel.cpp" line="221"/>
+        <location filename="tablemodel.cpp" line="228"/>
         <source>Column%1</source>
         <translation type="unfinished"></translation>
     </message>
