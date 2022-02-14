@@ -27,10 +27,9 @@ public:
     // Insert various types of cells into a sheet. Note that these trigger reevaluation.
     void insertCell(int key, QString name, QString type, QString expr);
     void insertLiteralList(int key, QString name, QString type, QStringList lits);
-    void insertTable(
-            int key,
+    void insertTable(int key,
             QString name,
-            QStringList headers,
+            QStringList headers, QVector<QString *> types,
             QVector<QString *> formulae,
             QVector<QStringList> columns);
 

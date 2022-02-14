@@ -51,10 +51,14 @@ hsParseLiteralList clen cinput successPtr = do
             let xp = Fix . ASTFun "List" $ Fix . ASTLit <$> values
             in poke successPtr cTrue >> newStablePtr (xp, InputList inputs)
 
-hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString) -> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (AST, Widget))
-hsParseTable clen cheader cformula ccollen ccol successPtr = do
+hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString) -> Ptr (Ptr CString) -> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (AST, Widget))
+hsParseTable clen cheader ctype cformula ccollen ccol successPtr = do
     cheaders <- peekArray (fromIntegral clen) cheader
     headers <- traverse (GHC.peekCString utf8) cheaders
+
+    ctypes <- peekArray (fromIntegral clen) ctype
+    types <- traverse (traverse (GHC.peekCString utf8) <=< ptrToMaybe) ctypes
+    let ptypes = fmap (>>= parseMaybe pPType) types
 
     cformulae <- peekArray (fromIntegral clen) cformula
     formulae <- traverse (traverse (GHC.peekCString utf8) <=< ptrToMaybe) cformulae
@@ -66,14 +70,15 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
     colss <- (traverse.traverse) (GHC.peekCString utf8) ccolss
     let colExprss = (fmap.traverse) (parseMaybe pExpr) colss
 
-    let columns' = zipWithM mkColumnExpr
+    let columns = zipWithM mkColumnExpr
             ((fmap.fmap) delocalise formulaeExprs)
             ((fmap.fmap.fmap) delocalise colExprss)
+        typedColumns = zipWithM mkTypedColumn ptypes =<< columns
 
-    case columns' of
+    case typedColumns of
         Nothing -> poke successPtr cFalse >> newStablePtr (Fix ASTNull, ValueCell "")
-        Just columns ->
-            let xp  = Fix  $ ASTFun "Table" [Fix $ ASTRecord Recursive (Map.fromList $ zip headers columns) headers]
+        Just typedColumns' ->
+            let xp = Fix $ ASTFun "Table" [Fix $ ASTRecord Recursive (Map.fromList $ zip headers typedColumns') headers]
             in poke successPtr cTrue >> newStablePtr (xp, Table $ zip headers $ zipWith mkColumnEither formulae colss)
   where
     ptrToMaybe :: Storable a => Ptr a -> IO (Maybe a)
@@ -85,6 +90,10 @@ hsParseTable clen cheader cformula ccollen ccol successPtr = do
     mkColumnExpr (Just x) _         = Just x
     mkColumnExpr _       (Just col) = Just $ Fix $ ASTFun "List" col
     mkColumnExpr Nothing Nothing    = Nothing
+
+    mkTypedColumn :: Maybe PType -> AST -> Maybe AST
+    mkTypedColumn Nothing  x = Just x
+    mkTypedColumn (Just (Forall ts us t)) x = Just $ Fix $ ASTTApp x (Forall ts us $ TList t)
 
     mkColumnEither :: Maybe String -> [String] -> Either String [String]
     mkColumnEither (Just x) _ = Left x
@@ -257,7 +266,7 @@ hsNullStablePtr = newStablePtr ()
 foreign export ccall hsNewSheet :: IO (StablePtr (IORef Sheet))
 foreign export ccall hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr (AST, Widget))
 foreign export ccall hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr (AST, Widget))
-foreign export ccall hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString)-> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (AST, Widget))
+foreign export ccall hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString) -> Ptr (Ptr CString) -> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (AST, Widget))
 foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
 foreign export ccall hsNothing :: IO (StablePtr (Maybe a))
 foreign export ccall hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr (AST, Widget) -> IO (StablePtr Cell)

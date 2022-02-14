@@ -107,6 +107,7 @@ void HsSheet::insertTable(
         int key
         , QString name
         , QStringList headers
+        , QVector<QString *> types
         , QVector<QString *> formulae
         , QVector<QStringList> columns)
 {
@@ -115,6 +116,7 @@ void HsSheet::insertTable(
     int length = headers.length();
 
     char **cheaders = new char*[length];
+    char ***ctypes = new char**[length];
     char ***cformulae = new char**[length];
     int *collens = new int[length];
     char ***ccols = new char**[length];
@@ -134,6 +136,15 @@ void HsSheet::insertTable(
         else
             cformulae[i] = nullptr;
 
+        if (QString* type = types[i])
+        {
+            ctypes[i] = new char*;
+            *(ctypes[i]) = new char[types.length()+1];
+            strcpy(*(ctypes[i]), type->toUtf8().data());
+        }
+        else
+            ctypes[i] = nullptr;
+
         QStringList column = columns[i];
         int collen = column.length();
         collens[i] = collen;
@@ -147,7 +158,7 @@ void HsSheet::insertTable(
     }
 
     bool *parseSuccess = new bool();
-    HsStablePtr pexpr = hsParseTable(length, cheaders, cformulae, collens, ccols, parseSuccess);
+    HsStablePtr pexpr = hsParseTable(length, cheaders, ctypes, cformulae, collens, ccols, parseSuccess);
     if (!*parseSuccess)
         goto free;
 
@@ -165,6 +176,8 @@ free:
         delete cheaders[i];
         if (char **cformula = cformulae[i])
             delete *cformula;
+        if (char **ctype = ctypes[i])
+            delete *ctype;
         for (int j=0; j<collens[i]; j++)
             delete ccols[i][j];
         delete[] ccols[i];

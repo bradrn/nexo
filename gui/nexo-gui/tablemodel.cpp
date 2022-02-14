@@ -15,6 +15,7 @@ TableModel::TableModel(int key, HsSheet *sheet, QObject *parent)
     contents.insert(0,
         { "Column1",
           nullptr,
+          nullptr,
           QStringList("0")
         });
 
@@ -73,6 +74,13 @@ QVariant TableModel::data(const QModelIndex &index, int role) const
             return column.header;
         if (index.row() == 1)
         {
+            if (QString *type = column.type)
+                return *type;
+            else
+                return QVariant();
+        }
+        if (index.row() == 2)
+        {
             if (QString *formula = column.formula)
                 return *formula;
             else
@@ -114,6 +122,8 @@ QVariant TableModel::headerData(int section, Qt::Orientation orientation, int ro
     case 0:
         return tr("Header");
     case 1:
+        return tr("Type");
+    case 2:
         return tr("Formula");
     default:
         return QStringLiteral("%1").arg(section-prefaceRows);
@@ -168,11 +178,13 @@ bool TableModel::insertColumns(int column, int count, const QModelIndex &parent)
 void TableModel::invalidate()
 {
     QStringList headers;
+    QVector<QString *> types;
     QVector<QString *> formulae;
     QVector<QStringList> cells = QVector<QStringList>();
 
     int realColumnCount = 1 + *std::max_element(contents.keyBegin(), contents.keyEnd());
     headers.reserve(realColumnCount);
+    types.reserve(realColumnCount);
     formulae.reserve(realColumnCount);
     cells.reserve(realColumnCount);
 
@@ -180,10 +192,11 @@ void TableModel::invalidate()
     {
         const Column &column = *i;
         headers.append(column.header);
+        types.append(column.type);
         formulae.append(column.formula);
         cells.append(column.cells);
     }
-    sheet->insertTable(key, name, headers, formulae, cells);
+    sheet->insertTable(key, name, headers, types, formulae, cells);
 }
 
 void TableModel::requery()
@@ -210,6 +223,7 @@ void TableModel::doSetData(const QModelIndex &index, const QVariant &value)
         contents.insert(index.column(),
             { "",
               nullptr,
+              nullptr,
               QStringList("")
             });
         neednewheader = true;
@@ -230,6 +244,15 @@ void TableModel::doSetData(const QModelIndex &index, const QVariant &value)
     // replace content
 
     if (index.row() == 1)
+    {
+        QString valueStr = value.toString();
+        if (valueStr.isEmpty())
+            column.type = nullptr;
+        else
+            column.type = new QString(valueStr);
+
+    }
+    else if (index.row() == 2)
     {
         QString valueStr = value.toString();
         if (valueStr.isEmpty())

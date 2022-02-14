@@ -35,11 +35,13 @@ private:
     QString name;
     HsSheet *sheet;
 
-    static const int prefaceRows = 2;
+    static const int prefaceRows = 3;
     struct Column
     {
         QString header;
-        QString *formula; // nullptr for columns lacking a formula
+        // below field are optional: either a QString or nullptr
+        QString *type;
+        QString *formula;
         QStringList cells;
     };
 
