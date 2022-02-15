@@ -64,7 +64,7 @@ void Value::invalidate()
 
 void Value::requery()
 {
-    auto result = sheet->queryCell(key);
+    auto result = sheet->queryValue(key);
 
     if (QString *msg = std::get_if<QString>(&result))
     {

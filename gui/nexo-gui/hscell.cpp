@@ -50,6 +50,12 @@ QString HsCell::exprAt(int row, int col) const
     return QString::fromUtf8(static_cast<char *>(hsExprAt(row, col, cell)));
 }
 
+QString HsCell::typeOf(QString col) const
+{
+    return QString::fromUtf8(static_cast<char *>(
+        hsCellTypeOfColumn(col.toUtf8().data(), cell)));
+}
+
 int HsCell::cols() const
 {
     return hsWidgetCols(cell);

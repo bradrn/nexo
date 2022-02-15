@@ -2,6 +2,7 @@
 #include "hssheet.h"
 #include "hsvalue.h"
 #include "hscell.h"
+#include "tabledelegate.h"
 
 #include <QLineEdit>
 
@@ -76,6 +77,10 @@ QVariant TableModel::data(const QModelIndex &index, int role) const
         {
             if (QString *type = column.type)
                 return *type;
+            else if (HsCell *c = sheet->queryCell(key))
+            {
+                return QVariant::fromValue(TableDelegate::InferredType { c->typeOf(column.header) });
+            }
             else
                 return QVariant();
         }
@@ -201,7 +206,7 @@ void TableModel::invalidate()
 
 void TableModel::requery()
 {
-    auto result = sheet->queryCell(key);
+    auto result = sheet->queryValue(key);
 
     if (QString *msg = std::get_if<QString>(&result))
     {

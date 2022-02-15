@@ -28,6 +28,7 @@ public:
     QString type() const;
     WidgetType widgetType() const;
     QString exprAt(int row, int col) const;
+    QString typeOf(QString col) const;
 
     int cols() const;
     int rows() const;

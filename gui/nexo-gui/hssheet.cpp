@@ -198,7 +198,23 @@ void HsSheet::enableInserts()
     disallowInserts = false;
 }
 
-std::variant<std::monostate, QString, HsValue> HsSheet::queryCell(int key)
+HsCell *HsSheet::queryCell(int key)
+{
+    bool *successPtr = new bool;
+    HsCell *c = new HsCell(hsQueryCell(key, hsSheet, successPtr));
+    if (successPtr)
+    {
+        delete successPtr;
+        return c;
+    }
+    else
+    {
+        delete successPtr;
+        return nullptr;
+    }
+}
+
+std::variant<std::monostate, QString, HsValue> HsSheet::queryValue(int key)
 {
     std::variant<std::monostate, QString, HsValue> retval {};
 

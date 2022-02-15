@@ -21,7 +21,7 @@ import Nexo.Expr.Parse
 import Nexo.Expr.Type
 import Nexo.Expr.Type.Annotated (delocalise)
 import Nexo.Interpret (Value(..), render)
-import Nexo.Render (renderType)
+import Nexo.Render (renderType, renderMonomorphicType)
 import Nexo.Sheet
 import Nexo.Sheet.Parse (parseSheet)
 import Nexo.Sheet.Render (renderSheet)
@@ -195,6 +195,18 @@ hsCellName = GHC.newCString utf8 . cellName <=< deRefStablePtr
 hsCellType :: StablePtr Cell -> IO CString
 hsCellType = GHC.newCString utf8 . maybe "" renderType . cellType <=< deRefStablePtr
 
+-- partial function - assumes that the column exists
+hsCellTypeOfColumn :: CString -> StablePtr Cell -> IO CString
+hsCellTypeOfColumn ccol ccell = do
+    cell <- deRefStablePtr ccell
+    col <- GHC.peekCString utf8 ccol
+    GHC.newCString utf8 $ maybe "" (renderMonomorphicType . typeAtColumn col) $ cellType cell
+  where
+    typeAtColumn :: String -> PType -> Type
+    typeAtColumn col (Forall _ _ (TTable rec)) = rec Map.! col
+    typeAtColumn col (Forall _ _ (TRecord rec)) = rec Map.! col
+    typeAtColumn _ _ = error "hsCellTypeOfColumn: unknown column"
+
 hsParseSheet :: CString -> Ptr CBool -> IO (StablePtr (IORef Sheet))
 hsParseSheet cinput successPtr = do
     input <- GHC.peekCString utf8 cinput
@@ -281,6 +293,7 @@ foreign export ccall hsWidgetRows :: StablePtr Cell -> IO CInt
 foreign export ccall hsExprAt :: CInt -> CInt -> StablePtr Cell -> IO CString
 foreign export ccall hsCellName :: StablePtr Cell -> IO CString
 foreign export ccall hsCellType :: StablePtr Cell -> IO CString
+foreign export ccall hsCellTypeOfColumn :: CString -> StablePtr Cell -> IO CString
 foreign export ccall hsParseSheet :: CString -> Ptr CBool -> IO (StablePtr (IORef Sheet))
 foreign export ccall hsRenderSheet :: StablePtr (IORef Sheet) -> IO CString
 foreign export ccall hsDisplayError :: StablePtr ValueState' -> IO CString

@@ -39,7 +39,8 @@ public:
     void disableInserts();
     void enableInserts();
 
-    std::variant<std::monostate, QString, HsValue> queryCell(int key);
+    HsCell *queryCell(int key);
+    std::variant<std::monostate, QString, HsValue> queryValue(int key);
 
     bool reevaluate();
 

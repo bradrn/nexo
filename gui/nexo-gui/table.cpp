@@ -1,5 +1,6 @@
 #include "hscell.h"
 #include "table.h"
+#include "tabledelegate.h"
 #include "tablemodel.h"
 
 #include <QAction>
@@ -14,6 +15,7 @@ Table::Table(int key, HsSheet *sheet, QWidget *parent)
     : QWidget(parent)
 {
     model = new TableModel(key, sheet, parent);
+    delegate = new TableDelegate();
 
     QVBoxLayout *l = new QVBoxLayout(this);
 
@@ -22,6 +24,7 @@ Table::Table(int key, HsSheet *sheet, QWidget *parent)
 
     valueDisplay = new QTableView(this);
     valueDisplay->setModel(model);
+    valueDisplay->setItemDelegate(delegate);
     valueDisplay->horizontalHeader()->hide();
     l->addWidget(valueDisplay);
 

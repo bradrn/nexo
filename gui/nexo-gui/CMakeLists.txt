@@ -38,6 +38,8 @@ add_executable(nexo-gui
   inputlist.h
   tablemodel.cpp
   tablemodel.h
+  tabledelegate.cpp
+  tabledelegate.h
   table.cpp
   table.h
   ${TS_FILES}

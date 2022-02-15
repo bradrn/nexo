@@ -5,6 +5,7 @@
 
 class HsCell;
 class HsSheet;
+class TableDelegate;
 class TableModel;
 class QTableView;
 class QLineEdit;
@@ -26,6 +27,7 @@ private slots:
 
 private:
     TableModel *model;
+    TableDelegate *delegate;
 
     QLineEdit *nameEdit;
     QTableView *valueDisplay;

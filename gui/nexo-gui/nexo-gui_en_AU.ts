@@ -32,12 +32,12 @@
 <context>
     <name>Table</name>
     <message>
-        <location filename="table.cpp" line="28"/>
+        <location filename="table.cpp" line="31"/>
         <source>Add &amp;row</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="table.cpp" line="29"/>
+        <location filename="table.cpp" line="32"/>
         <source>Add &amp;column</source>
         <translation type="unfinished"></translation>
     </message>
@@ -45,22 +45,22 @@
 <context>
     <name>TableModel</name>
     <message>
-        <location filename="tablemodel.cpp" line="123"/>
+        <location filename="tablemodel.cpp" line="128"/>
         <source>Header</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="tablemodel.cpp" line="125"/>
+        <location filename="tablemodel.cpp" line="130"/>
         <source>Type</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="tablemodel.cpp" line="127"/>
+        <location filename="tablemodel.cpp" line="132"/>
         <source>Formula</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="tablemodel.cpp" line="242"/>
+        <location filename="tablemodel.cpp" line="247"/>
         <source>Column%1</source>
         <translation type="unfinished"></translation>
     </message>
