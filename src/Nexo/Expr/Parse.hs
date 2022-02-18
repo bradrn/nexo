@@ -86,7 +86,7 @@ pUnitType =
 
 pType :: Parser Type
 pType = do
-    t1 <- TNum <$> (symbol "Num" *> pUnitType)
+    t1 <- TNum . TUnit <$> (symbol "Num" *> pUnitType)
         <|> TBool <$ symbol "Bool"
         <|> TText <$ symbol "Text"
         <|> try pNoArgFun

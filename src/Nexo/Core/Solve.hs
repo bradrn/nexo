@@ -18,8 +18,8 @@ data Constraint = Unify Type Type | Subtype Type Type
   deriving (Show)
 
 instance Substitutable Constraint where
-    apply s (Unify t1 t2)   = Unify   <$> apply s t1 <*> apply s t2
-    apply s (Subtype t1 t2) = Subtype <$> apply s t1 <*> apply s t2
+    apply s (Unify t1 t2)   = Unify   (apply s t1) (apply s t2)
+    apply s (Subtype t1 t2) = Subtype (apply s t1) (apply s t2)
 
     frees (Unify t1 t2)   = frees t1 <> frees t2
     frees (Subtype t1 t2) = frees t1 <> frees t2
@@ -70,7 +70,7 @@ unify (Subtype (TTable t1) r2) = do
     unify (Subtype r1 r2)
 unify (Subtype t1 t2) = unify (Unify t1 t2)
 
-unify (Unify (TNum u) (TNum v)) = unifyU u v
+unify (Unify (TNum u) (TNum v)) = unify (Unify u v)
 unify (Unify TBool TBool) = pure nullSubst
 unify (Unify TText TText) = pure nullSubst
 unify (Unify (TVar (Undetermined v)) r) = bind v (Left r)
@@ -97,6 +97,7 @@ unify (Unify (TTable t1) (TTable t2)) = do
             t1 t2
     cs <- sequenceA $ Map.elems merged
     whenRight $ solve cs
+unify (Unify (TUnit u1) (TUnit u2)) = unifyU u1 u2
 unify _ = Nothing
 
 unifyU :: UnitDef -> UnitDef -> Maybe Subst
@@ -146,9 +147,7 @@ solve [] = pure nullSubst
 solve (c:cs) =
     case unify c of
         Nothing -> Left c
-        Just s1 ->
-            case traverse (apply s1) cs of
-                Nothing -> Left c
-                Just cs' -> do
-                    s2 <- solve cs'
-                    maybe (Left c) Right $ s2 `compose` s1
+        Just s1 -> do
+            let cs' = apply s1 <$> cs
+            s2 <- solve cs'
+            pure $ s2 `compose` s1

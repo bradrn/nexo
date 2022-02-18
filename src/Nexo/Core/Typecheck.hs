@@ -36,8 +36,8 @@ toMismatch :: Constraint -> Mismatch
 toMismatch (Unify   tSupplied tDeclared) = Mismatch { tSupplied, tDeclared }
 toMismatch (Subtype tSupplied tDeclared) = Mismatch { tSupplied, tDeclared } 
 
-apply' :: (MonadError TypeError m, Substitutable a) => Subst -> a -> m a
-apply' s a = whenJustElse KindMismatch $ apply s a
+apply' :: Substitutable a => Subst -> a -> a
+apply' = apply
     
 data Conversion
     = MultiplyBy Double Conversion
@@ -67,7 +67,7 @@ getConversion supplied@(TList _) declared =
     stripLists 0 t = t
     stripLists n (TList t) | n>0 = stripLists (n-1) t
     stripLists _ _ = error "getConversion: bug in unifier"
-getConversion (TNum uSupplied) (TNum uDeclared) =
+getConversion (TUNum uSupplied) (TUNum uDeclared) =
     case concord uSupplied uDeclared of
         Just 1 -> IdConversion
         Just f -> MultiplyBy f IdConversion
@@ -93,14 +93,14 @@ applyConversion (MultiplyBy f conv) (x, (c, t)) = do
     -- note that we avoid infinite recursion by doing all calculations with concordant units
 
     let removeUnits (TList a) = TList $ removeUnits a
-        removeUnits (TNum _) = TNum Uno
+        removeUnits (TNum _) = TUNum Uno
         removeUnits _ = error "applyConversion: bug in inferStep"
         t' = removeUnits t
 
     let xNum = Fix (XAtom (Lit (LNum f)))
-    timesType <- instantiate $ Forall [] ["u", "v"] $ TFun [TNum $ UVarR "u", TNum $ UVarR "v"] (TNum $ UMul (UVarR "u") (UVarR "v"))
+    timesType <- instantiate $ Forall [] ["u", "v"] $ TFun [TUNum $ UVarR "u", TUNum $ UVarR "v"] (TUNum $ UMul (UVarR "u") (UVarR "v"))
     c' <- inferStep $ XFunApp (Fix (XAtom (Var "*")), pure (CVar "*", timesType))
-        [ (xNum, pure (CLit (LNum f), TNum Uno))
+        [ (xNum, pure (CLit (LNum f), TUNum Uno))
         , (x, pure (c, t'))
         ]
     applyConversion conv (Fix $ XNamedFunApp "*" [xNum, x], c')
@@ -114,12 +114,11 @@ getConvertedExpr
        , MonadSubst m
        )
     => Subst -> (Expr, (CoreExpr, Type)) -> Type -> m ((Int, CoreExpr), Conversion)
-getConvertedExpr s (x, (suppliedExpr, suppliedT)) declaredT = do
-    suppliedT' <- apply' s suppliedT
-    declaredT' <- apply' s declaredT
-
-    let conv = getConversion suppliedT' declaredT'
-    (,conv) <$> applyConversion conv (x, (suppliedExpr, suppliedT'))
+getConvertedExpr s (x, (suppliedExpr, suppliedT)) declaredT =
+    let suppliedT' = apply' s suppliedT
+        declaredT' = apply' s declaredT
+        conv = getConversion suppliedT' declaredT'
+    in (,conv) <$> applyConversion conv (x, (suppliedExpr, suppliedT'))
 
 liftBy :: Int -> Type -> Type
 liftBy 0 t = t
@@ -137,8 +136,7 @@ getConvertedArgs s (supplied, ret) declaredT = do
     let declaredTs = getTFunArgs declaredT
     (convertedArgs, convs) <- unzip <$>
         traverse2 (getConvertedExpr s) supplied declaredTs
-    ret' <- liftBy (getMaxLift convs) <$>
-        apply' s ret
+    let ret' = liftBy (getMaxLift convs) $ apply' s ret
     pure (convertedArgs, ret')
   where
     getTFunArgs (TFun args _) = args
@@ -172,7 +170,7 @@ inferStep
     -> m (CoreExpr, Type)
 inferStep = \case
     XAtom Null -> (CNull,) . TVar <$> fresh
-    XAtom (Lit n@(LNum _)) -> pure (CLit n, TNum Uno)
+    XAtom (Lit n@(LNum _)) -> pure (CLit n, TUNum Uno)
     XAtom (Lit n@(LBool _)) -> pure (CLit n, TBool)
     XAtom (Lit n@(LText _)) -> pure (CLit n, TText)
     XAtom (Var v) -> do
@@ -204,7 +202,7 @@ inferStep = \case
                 s <- whenJustElse e $ unify (Unify tSupplied tDeclared)
                 xConverted <- snd . fst <$> getConvertedExpr s (x, rElem) tDeclared
                 applyToEnv s
-                t <- apply' s tDeclared
+                let t = apply' s tDeclared
                 pure (name, (xConverted, t))
 
             pure (CRec Recursive (second fst <$> r), TRecord (snd <$> Map.fromList r))
@@ -217,7 +215,7 @@ inferStep = \case
 
         elemsConverted <- traverse (fmap fst . flip (getConvertedExpr s) tv) xs
 
-        t <- apply' s tv
+        let t = apply' s tv
         applyToEnv s
 
         pure (CApp (CVar "List") elemsConverted, TList t)
@@ -232,7 +230,7 @@ inferStep = \case
                         Mismatch { tSupplied, tDeclared }
                 s <- whenJustElse e $ unify $ Unify tSupplied tDeclared
                 applyToEnv s
-                apply' s tvar
+                pure $ apply' s tvar
             pure (CTab x, TTable ts)
         [(_, t)] -> throwError $ TableColumnsUnknown t
         _ -> throwError $ WrongNumberOfArguments "Table"
@@ -256,7 +254,7 @@ inferStep = \case
             let c = Subtype rt (TRecord $ Map.singleton f $ TVar tv)
             s <- whenJustElse (RecordFieldAbsent f) $ unify c
             -- then back-substitute
-            t <- apply' s (TVar tv)
+            let t = apply' s (TVar tv)
             applyToEnv s
             pure (CApp (CVar "GetField") [(0,r), (0,CLit (LText f))], t)
         _ -> throwError $ WrongNumberOfArguments "GetField"
@@ -275,12 +273,12 @@ inferStep = \case
     XUnitApp (_, x') u -> do
         (x, t) <- x'
         let e = TypeMismatch UnitAp $
-                Mismatch { tSupplied = t, tDeclared = TNum Uno }
-        _ <- whenJustElse e $ unify (Subtype t (TNum Uno))
+                Mismatch { tSupplied = t, tDeclared = TUNum Uno }
+        _ <- whenJustElse e $ unify (Subtype t (TUNum Uno))
 
-        case getConversion t (TNum Uno) of
-            UnliftBy n _ -> pure (x, liftBy n $ TNum u)
-            _            -> pure (x, TNum u)
+        case getConversion t (TUNum Uno) of
+            UnliftBy n _ -> pure (x, liftBy n $ TUNum u)
+            _            -> pure (x, TUNum u)
     XTypeApp (orig, x') pty -> do
         let t' = instantiateRigid pty
         (x, t) <- x'

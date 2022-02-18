@@ -28,6 +28,7 @@ import Control.Monad.Except (runExceptT, MonadError(..), ExceptT(..), withExcept
 import Control.Monad.State.Strict
     ( gets, modify', State, StateT (..), MonadState(..) )
 import Control.Monad.Trans (lift)
+import Data.Bifunctor (second)
 import Data.Fix (Fix(Fix))
 import Data.Foldable (asum)
 import Data.Functor ((<&>))
@@ -44,7 +45,7 @@ import Nexo.Env (MonadScoped(..), MonadEnv(..), MonadSubst(..))
 import Nexo.Expr.Desugar
 import Nexo.Env.Std
 import Nexo.Error
-import Nexo.Core.Type (TypeError(KindMismatch, UnknownName))
+import Nexo.Core.Type (TypeError(UnknownName))
 
 data ValueState e
     = ValuePresent PType (Value e)
@@ -99,8 +100,8 @@ instance Show GlobalEnv where
 
 instance Substitutable GlobalEnv where
     apply s GlobalEnv{..} =
-        flip (GlobalEnv imports globalCells) localValues <$>  -- assume other cells have no frees
-            traverse (\(n,t) -> (n,) <$> apply s t) localTypes
+        flip (GlobalEnv imports globalCells) localValues $  -- assume other cells have no frees
+            second (apply s) <$> localTypes
     frees GlobalEnv{localTypes=locals} =
         let (tfs, ufs) = unzip $ frees . snd <$> locals
         in (unions tfs, unions ufs)
@@ -156,10 +157,8 @@ instance MonadEnv (ExceptT RuntimeError Eval Value') (ExceptT RuntimeError Eval)
         e{localValues=b:localValues}
 
 instance MonadSubst (ExceptT TypeError Eval) where
-  applyToEnv subst = ExceptT $ Eval $ \e ->
-      case apply subst e of
-          Just e' -> (Right (), e')
-          Nothing -> (Left KindMismatch, e)
+    applyToEnv subst = ExceptT $ Eval $ \e ->
+        (Right (), apply subst e)
 
 lookupImports :: String -> Eval (Maybe (PType, Value GlobalEnv))
 lookupImports n = asum . fmap (Map.lookup n) <$> gets imports

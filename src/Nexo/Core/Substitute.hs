@@ -18,36 +18,37 @@ type Subst = Map.Map String (Either Type UnitDef)
 nullSubst :: Subst
 nullSubst = Map.empty
 
-compose :: Subst -> Subst -> Maybe Subst
-compose s1 s2 = do
-    s2' <- traverse (apply s1) s2
-    pure $ Map.union s2' s1
+compose :: Subst -> Subst -> Subst
+compose s1 s2 =
+    let s2' = apply s1 <$> s2
+    in Map.union s2' s1
 
 class Substitutable a where
-    apply :: Subst -> a -> Maybe a
+    apply :: Subst -> a -> a
     frees :: a -> (Set.Set TVar, Set.Set TVar)
 
 instance (Substitutable a, Substitutable b) => Substitutable (Either a b) where
-    apply s (Left a) = Left <$> apply s a
-    apply s (Right b) = Right <$> apply s b
+    apply s (Left a) = Left $ apply s a
+    apply s (Right b) = Right $ apply s b
 
     frees (Left a) = frees a
     frees (Right b) = frees b
 
 instance Substitutable Type where
-    apply s (TNum u) = TNum <$> apply s u
-    apply _ TBool = Just TBool
-    apply _ TText = Just TText
+    apply s (TNum u) = TNum $ apply s u
+    apply _ TBool = TBool
+    apply _ TText = TText
     apply s tv@(TVar (Undetermined v)) =
         case Map.lookup v s of
-            Just (Left t) -> Just t
-            Just (Right _) -> Nothing
-            Nothing -> Just tv
-    apply _ tv@(TVar (Rigid _)) = Just tv
-    apply s (TFun ts r) = TFun <$> traverse (apply s) ts <*> apply s r
-    apply s (TList t) = TList <$> apply s t
-    apply s (TRecord ts) = TRecord <$> traverse (apply s) ts
-    apply s (TTable ts) = TTable <$> traverse (apply s) ts
+            Just (Left t) -> t
+            Just (Right u) -> TUnit u
+            Nothing -> tv
+    apply _ tv@(TVar (Rigid _)) = tv
+    apply s (TFun ts r) = TFun (apply s <$> ts) (apply s r)
+    apply s (TList t) = TList $ apply s t
+    apply s (TRecord ts) = TRecord $ apply s <$> ts
+    apply s (TTable ts) = TTable $ apply s <$> ts
+    apply s (TUnit u) = TUnit $ apply s u
 
     frees (TNum u) = frees u
     frees TBool = (Set.empty, Set.empty)
@@ -63,19 +64,20 @@ instance Substitutable Type where
     frees (TTable ts) =
         case unzip $ frees <$> Map.elems ts of
             (vs, us) -> (Set.unions vs, Set.unions us)
+    frees (TUnit u) = frees u
 
 instance Substitutable UnitDef where
-    apply _ n@(ULeaf _)   = Just n
-    apply _ f@(UFactor _) = Just f
-    apply s (UMul u v) = UMul <$> apply s u <*> apply s v
-    apply s (UDiv u v) = UDiv <$> apply s u <*> apply s v
-    apply s (UExp u x) = (`UExp` x) <$> apply s u
+    apply _ n@(ULeaf _)   = n
+    apply _ f@(UFactor _) = f
+    apply s (UMul u v) = UMul (apply s u) (apply s v)
+    apply s (UDiv u v) = UDiv (apply s u) (apply s v)
+    apply s (UExp u x) = apply s u `UExp` x
     apply s tv@(UVar (Undetermined v)) =
         case Map.lookup v s of
-            Just (Left _) -> Nothing
-            Just (Right t) -> Just t
-            Nothing -> Just tv
-    apply _ tv@(UVar (Rigid _)) = Just tv
+            Just (Left _) -> error "apply (UnitDef): attempted to substitute type into unit"
+            Just (Right t) -> t
+            Nothing -> tv
+    apply _ tv@(UVar (Rigid _)) = tv
 
     frees (ULeaf _) = (Set.empty, Set.empty)
     frees (UFactor _) = (Set.empty, Set.empty)
@@ -85,7 +87,7 @@ instance Substitutable UnitDef where
     frees (UVar v) = (Set.empty, Set.singleton v)
 
 instance Substitutable PType where
-    apply s (Forall as us t) = Forall as us <$> apply (foldr Map.delete s (as++us)) t
+    apply s (Forall as us t) = Forall as us $ apply (foldr Map.delete s (as++us)) t
 
     frees (Forall as us t) =
         let (vs, xs) = frees t
@@ -124,7 +126,7 @@ instantiate (Forall as us t) = do
     us' <- for us $ \u -> (u,) <$> fresh
     pure $ derigidify as' us' t
   where
-    derigidify _   us' (TNum u) = TNum $ derigidifyU us' u
+    derigidify as' us' (TNum ty) = TNum $ derigidify as' us' ty
     derigidify _   _   TBool = TBool
     derigidify _   _   TText = TText
     derigidify as' _   (TVar (Rigid v))
@@ -134,6 +136,7 @@ instantiate (Forall as us t) = do
     derigidify as' us' (TList ty') = TList (derigidify as' us' ty')
     derigidify as' us' (TRecord r) = TRecord (derigidify as' us' <$> r)
     derigidify as' us' (TTable r) = TTable (derigidify as' us' <$> r)
+    derigidify _   us' (TUnit u) = TUnit $ derigidifyU us' u
 
     derigidifyU _   u@(ULeaf _) = u
     derigidifyU _   u@(UFactor _) = u
@@ -156,7 +159,7 @@ generalise t =
     getName (Rigid v) = v
     getName (Undetermined v) = v
 
-    rigidify (TNum u) = TNum $ rigidifyU u
+    rigidify (TNum ty) = TNum $ rigidify ty
     rigidify TBool = TBool
     rigidify TText = TText
     rigidify (TVar (Undetermined v)) = TVarR v
@@ -165,6 +168,7 @@ generalise t =
     rigidify (TList ty') = TList (rigidify ty')
     rigidify (TRecord r) = TRecord (rigidify <$> r)
     rigidify (TTable r) = TTable (rigidify <$> r)
+    rigidify (TUnit u) = TUnit (rigidifyU u)
 
     rigidifyU u@(ULeaf _) = u
     rigidifyU u@(UFactor _) = u

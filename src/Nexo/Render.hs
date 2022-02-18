@@ -52,7 +52,7 @@ renderType (Forall _ts _us t) = renderMonomorphicType t
 
 renderMonomorphicType :: Type -> String
 renderMonomorphicType = \case
-    TNum u -> "Num<" ++ renderUnit u ++ ">"
+    TNum t -> "Num<" ++ renderMonomorphicType t ++ ">"
     TBool -> "Bool"
     TText -> "Text"
     TVar (Rigid v) -> '\'' : v
@@ -61,6 +61,7 @@ renderMonomorphicType = \case
     TList a -> "List(" ++ renderMonomorphicType a ++ ")"
     TRecord rec -> '(' : intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderMonomorphicType v]) rec) ++ ")"
     TTable rec -> "Table(" ++ intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderMonomorphicType v]) rec) ++ ")"
+    TUnit u -> renderUnit u
 
 renderLit :: Literal -> String
 renderLit (LNum x) = show x

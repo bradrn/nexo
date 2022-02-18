@@ -42,7 +42,7 @@ makeBaseFunctor ''UnitDef
 
 -- | Data type listing all the types in Nexo
 data Type
-    = TNum UnitDef
+    = TNum Type
     | TBool
     | TText
     | TVar TVar
@@ -50,7 +50,11 @@ data Type
     | TList Type
     | TRecord (Map.Map String Type)
     | TTable (Map.Map String Type)
+    | TUnit UnitDef
     deriving (Show, Eq, Ord)
+
+pattern TUNum :: UnitDef -> Type
+pattern TUNum u = TNum (TUnit u)
 
 pattern TVarR :: String -> Type
 pattern TVarR a = TVar (Rigid a)

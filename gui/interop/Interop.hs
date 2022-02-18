@@ -237,6 +237,7 @@ hsExtractTopLevelType ptr = deRefStablePtr ptr >>= \case
         TRecord _ -> 6
         TFun _ _ -> 7
         TTable _ -> 8
+        TUnit _ -> 0  -- shouldn't occur as a top-level type, treat as absent value if found
     _ -> return 0
 
 hsExtractValue :: StablePtr ValueState' -> IO (StablePtr Value')
