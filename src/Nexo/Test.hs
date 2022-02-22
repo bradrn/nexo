@@ -3,9 +3,9 @@ module Nexo.Test where
 import qualified Data.Map.Strict as Map
 import Data.Traversable (for)
 
+import Nexo.Core.Type
 import Nexo.Error (Error(..))
 import Nexo.Expr.Parse
-import Nexo.Expr.Type
 import Nexo.Expr.Type.Annotated (delocalise)
 import Nexo.Interpret
 import Nexo.Sheet

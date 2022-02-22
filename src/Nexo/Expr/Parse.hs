@@ -4,7 +4,7 @@
 
 module Nexo.Expr.Parse
        ( parseMaybe
-       , pPType
+       , pType
        , pExpr
        , pExprInner
        , pLit
@@ -18,7 +18,6 @@ import Text.Megaparsec.Char ( alphaNumChar, space1, letterChar, char )
 import qualified Data.Map.Strict as Map
 import qualified Text.Megaparsec.Char.Lexer as L
 
-import Nexo.Core.Substitute (generalise)
 import Nexo.Expr.Type
 import Nexo.Expr.Type.Annotated
 
@@ -75,18 +74,18 @@ pUnit = do
       
     factored = ULeaf <$> pIdentifier
         <|> UFactor <$> lexeme (try L.float <|> L.decimal)
-        <|> UVar . Rigid <$> (char '\'' *> pIdentifier)
+        <|> UVar <$> (char '\'' *> pIdentifier)
         <|> paren pUnit
 
 pUnitType :: Parser UnitDef
 pUnitType =
     between (symbol "<") (symbol ">")
-        (pUnit <|> UVar . Rigid <$> (char '\'' *> pIdentifier))
+        (pUnit <|> UVar <$> (char '\'' *> pIdentifier))
     <|> pure Uno
 
 pType :: Parser Type
 pType = do
-    t1 <- TNum . TUnit <$> (symbol "Num" *> pUnitType)
+    t1 <- TNum <$> (symbol "Num" *> pUnitType)
         <|> TBool <$ symbol "Bool"
         <|> TText <$ symbol "Text"
         <|> try pNoArgFun
@@ -94,7 +93,7 @@ pType = do
         <|> TRecord <$> paren (pRecordSpec pType)
         <|> TTable <$> (symbol "Table" *> paren (pRecordSpec pType))
         <|> TList <$> (symbol "List" *> paren pType)
-        <|> TVar . Rigid <$> (char '\'' *> pIdentifier)
+        <|> TVar <$> (char '\'' *> pIdentifier)
     optional (symbol "->" *> pType) >>= pure . \case
         Just t2 -> TFun [t1] t2
         Nothing -> t1
@@ -104,9 +103,6 @@ pType = do
         <* symbol "->"
         <*> pType
     pNoArgFun = TFun [] <$ symbol "(" <* symbol ")" <* symbol "->" <*> pType
-
-pPType :: Parser PType
-pPType = generalise <$> pType
 
 pLit :: Parser Literal
 pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
@@ -121,7 +117,7 @@ pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
 pLet :: Parser (ASTF ASTLoc)
 pLet = symbol "Let" *> paren do
     v <- pIdentifier
-    vt <- optional $ symbol ":" *> pPType
+    vt <- optional $ symbol ":" *> pType
     _ <- symbol ","
     vx <- pExprInner
     _ <- symbol ","
@@ -155,7 +151,7 @@ pTerm = do
     r@(Fix (AnnLocF SourceSpan{spanStart} _)) <- annotateLoc pTermInner
     choice
         [ annotateLoc' (withBeginning spanStart) $ ASTField r <$> (symbol "." *> pIdentifier)
-        , annotateLoc' (withBeginning spanStart) $ ASTTApp r <$> (symbol ":" *> pPType)
+        , annotateLoc' (withBeginning spanStart) $ ASTTApp r <$> (symbol ":" *> pType)
         , annotateLoc' (withBeginning spanStart) $ ASTUnit r <$> try pUnit
         , pure r
         ]

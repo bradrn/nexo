@@ -6,7 +6,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
 module Nexo.Sheet
@@ -45,7 +44,7 @@ import Nexo.Env (MonadScoped(..), MonadEnv(..), MonadSubst(..))
 import Nexo.Expr.Desugar
 import Nexo.Env.Std
 import Nexo.Error
-import Nexo.Core.Type (TypeError(UnknownName))
+import Nexo.Core.Type
 
 data ValueState e
     = ValuePresent PType (Value e)
@@ -73,7 +72,7 @@ data Widget
 
 data Cell = Cell
     { cellName :: String
-    , cellType :: Maybe PType
+    , cellType :: Maybe Type
     , cellWidget :: Widget
     , cellExpr :: AST
     , cellValue :: ValueState GlobalEnv
@@ -102,9 +101,7 @@ instance Substitutable GlobalEnv where
     apply s GlobalEnv{..} =
         flip (GlobalEnv imports globalCells) localValues $  -- assume other cells have no frees
             second (apply s) <$> localTypes
-    frees GlobalEnv{localTypes=locals} =
-        let (tfs, ufs) = unzip $ frees . snd <$> locals
-        in (unions tfs, unions ufs)
+    frees GlobalEnv{localTypes=locals} = unions $ frees . snd <$> locals
 
 newtype Eval a = Eval
     { runEval :: GlobalEnv -> (a, GlobalEnv)
@@ -171,12 +168,12 @@ cacheExpr ident = gets (Map.lookup ident . globalCells) >>= \case
     Just c@Cell{cellType = type_, cellExpr = expr, cellValue = Invalidated} -> do
         let expr' = desugar $ maybe expr (Fix . ASTTApp expr) type_
         r <- runExceptT $ withExceptT TypeError $ typecheck expr'
-        (v, t) <- case r of
-            Left e -> pure (ValueError Nothing e, Nothing)
+        v <- case r of
+            Left e -> pure $ ValueError Nothing e
             Right (coreExpr, resultType) -> do
                 result <- runExceptT $ withExceptT RuntimeError $ evalExpr coreExpr
-                pure $ (,Just resultType) $ fromEither resultType result
-        modifySheet $ Map.insert ident (c { cellType = t, cellValue = v })
+                pure $ fromEither resultType result
+        modifySheet $ Map.insert ident (c { cellValue = v })
         pure $ Just v
     -- Else return cached value
     Just Cell{cellValue = v} -> pure $ Just v

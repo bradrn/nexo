@@ -9,8 +9,8 @@ import System.Directory (doesFileExist)
 import System.Environment (getExecutablePath)
 import System.FilePath ((</>), (<.>), dropFileName)
 
+import Nexo.Core.Type (PType)
 import Nexo.Error (Error(..))
-import Nexo.Expr.Type (PType)
 import Nexo.Interpret (Value)
 import Nexo.Sheet
 import Nexo.Sheet.Parse (parseSheet)

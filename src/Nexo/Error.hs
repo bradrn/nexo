@@ -4,7 +4,7 @@ module Nexo.Error where
 
 import Nexo.Core.Type (TypeError(..), Mismatch(..), Context(..), CoreExpr(CVar))
 import Nexo.Interpret (RuntimeError(..))
-import Nexo.Render (renderMonomorphicType)
+import Nexo.Render (renderCoreType)
 
 data Error
     = ParseError
@@ -23,12 +23,12 @@ renderTypeError (WrongNumberOfArguments s) = "Wrong number of arguments supplied
 renderTypeError (RecordFieldAbsent s) = "Attempted to access nonexistent field: " ++ s
 renderTypeError (TableColumnsUnknown ty) =
     "Attempted to create table from record without known column names.\nThe supplied record has the following type: "
-    ++ renderMonomorphicType ty
+    ++ renderCoreType ty
 renderTypeError LambdaArgumentNotVariable = "Attempted to use non-variable as argument to lambda"
 renderTypeError KindMismatch = "Attempted to use same variable for type and unit"
 renderTypeError (TypeMismatch ctx Mismatch{tSupplied, tDeclared}) =
     place ++ " has an unexpected type.\nThis expression has the following type: "
-    ++ renderMonomorphicType tSupplied ++ "\nBut " ++ reason ++ ": " ++ renderMonomorphicType tDeclared
+    ++ renderCoreType tSupplied ++ "\nBut " ++ reason ++ ": " ++ renderCoreType tDeclared
   where
     (place, reason) = case ctx of
       TypeSpecification -> ("The argument of a type specification", "the type specification says its type should be")

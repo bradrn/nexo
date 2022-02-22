@@ -20,6 +20,7 @@ library
                      , Nexo.Core.Substitute
                      , Nexo.Core.Type
                      , Nexo.Core.Typecheck
+                     , Nexo.Core.Unit
                      , Nexo.Env
                      , Nexo.Env.Std
                      , Nexo.Error
@@ -27,7 +28,6 @@ library
                      , Nexo.Expr.Parse
                      , Nexo.Expr.Type
                      , Nexo.Expr.Type.Annotated
-                     , Nexo.Expr.Unit
                      , Nexo.Render
                      , Nexo.Sheet
                      , Nexo.Sheet.Import

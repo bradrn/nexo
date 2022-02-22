@@ -25,7 +25,7 @@ renderCell Cell{..} =
 
     optionalCellType = case cellType of
         Nothing -> ""
-        Just t -> ' ' : ':' : ' ' : renderType t
+        Just t -> ' ' : ':' : ' ' : renderMonomorphicType t
 
     fromFormulaOrList :: Either String [String] -> Free ASTF String
     fromFormulaOrList (Left f) = Pure f

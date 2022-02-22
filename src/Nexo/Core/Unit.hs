@@ -1,9 +1,8 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE LambdaCase     #-}
-{-# LANGUAGE MultiWayIf     #-}
 {-# LANGUAGE TypeFamilies   #-}
 
-module Nexo.Expr.Unit where
+module Nexo.Core.Unit where
 
 import Control.Applicative (liftA2)
 import Data.Bifunctor (second)
@@ -14,58 +13,36 @@ import qualified Data.Map.Strict as Map
 import Nexo.Expr.Type
 import Data.Functor ((<&>))
 
+import Nexo.Core.Type
+
 -- | If the first unit can be converted to the second unit, returns
 -- the conversion factor from the second to the first; else returns
 -- 'Nothing'.
-concord :: UnitDef -> UnitDef -> Maybe Double
-concord u v
+concord :: Unit -> Unit -> Maybe Double
+concord u@(f, u') v@(g, v')
     | u == v = Just 1
-    | Just (f, u') <- simplify u
-    , Just (g, v') <- simplify v
-    , u' == v' = Just (f/g)
+    | u' == v' = Just (f/g)
     | otherwise = Nothing
 
--- | Return the first unit in the list only if they all concord.
-concords :: [UnitDef] -> Maybe UnitDef
-concords [] = Nothing
-concords (u:us) = u <$ traverse (concord u) us
-
--- | A unit in simplified representation: a factor multiplied by a map
--- from base units ('Left' case) or type variables ('Right' case) to
--- exponents.
-type Unit = (Double, Map.Map (Either String TVar) Int)
-
-unitToDef :: Unit -> UnitDef
-unitToDef (f, u) =
-    if | f==1, (u0:us) <- Map.toList u
-         -> foldr (UMul . term) (term u0) us
-       | otherwise
-         -> foldr (UMul . term) (UFactor f) (Map.toList u)
-  where
-    term :: (Either String TVar, Int) -> UnitDef
-    term (Left name, 1) = ULeaf name
-    term (Right var, 1) = UVar var
-    term (Left name, n) = UExp (ULeaf name) n
-    term (Right var, n) = UExp (UVar var) n
-
-simplify :: UnitDef -> Maybe Unit
+simplify :: UnitDef -> Either TypeError Unit
 simplify = fmap (second $ Map.filter (/=0)) . cata \case
     ULeafF l -> case expandName l of
-        Just x -> Just x
+        Just x -> Right x
         Nothing -> case lookupPrefix l of
-            Just (l', f) -> expandName l' <&> \(g, v) -> (f*g, v)
-            Nothing -> Nothing
-    UFactorF f -> Just (f, Map.empty)
+            Just (l', f) -> maybe (Left $ UnknownName l) Right $
+                expandName l' <&> \(g, v) -> (f*g, v)
+            Nothing -> Left $ UnknownName l
+    UFactorF f -> Right (f, Map.empty)
     UMulF u v -> liftA2 mul u v
     UDivF u v -> liftA2 div' u v
     UExpF u x -> exp' x <$> u
-    UVarF v -> Just (1, Map.singleton (Right v) 1)
+    UVarF v -> Right (1, Map.singleton (Right $ Rigid v) 1)
   where
     mul (f, u) (g, v) = (f*g, Map.unionWith (+) u v)
     div' (f, u) (g, v) = (f/g, Map.unionWith (+) u $ negate <$> v)
     exp' x (f, u) = (f^^x, (*x) <$> u)
 
-expandName :: String -> Maybe (Double, Map.Map (Either String TVar) Int)
+expandName :: String -> Maybe (Double, Map.Map (Either String CoreVar) Int)
 expandName "s"   = Just (1, Map.singleton (Left "s") 1)
 expandName "m"   = Just (1, Map.singleton (Left "m") 1)
 expandName "g"   = Just (1, Map.singleton (Left "g") 1)

@@ -16,11 +16,7 @@ import Data.Maybe (listToMaybe)
 
 import qualified Data.Map.Strict as Map
 
-data TVar
-    = Rigid String
-    | Undetermined String  -- used only internally in type inference algorithm
-                           -- ideally this would be in a separate type, but this seems easier
-    deriving (Show, Eq, Ord)
+type TVar = String
 
 data UnitDef
     = ULeaf String
@@ -42,7 +38,7 @@ makeBaseFunctor ''UnitDef
 
 -- | Data type listing all the types in Nexo
 data Type
-    = TNum Type
+    = TNum UnitDef
     | TBool
     | TText
     | TVar TVar
@@ -50,24 +46,7 @@ data Type
     | TList Type
     | TRecord (Map.Map String Type)
     | TTable (Map.Map String Type)
-    | TUnit UnitDef
     deriving (Show, Eq, Ord)
-
-pattern TUNum :: UnitDef -> Type
-pattern TUNum u = TNum (TUnit u)
-
-pattern TVarR :: String -> Type
-pattern TVarR a = TVar (Rigid a)
-
-pattern UVarR :: String -> UnitDef
-pattern UVarR a = UVar (Rigid a)
-
-data PType = Forall [String] [String] Type
-    deriving (Show)
-
--- | Warning: only use this in tests! This does not check for type
--- variable equivalence
-deriving instance Eq PType
 
 meet :: Type -> Type -> Maybe Type
 meet t u | t == u = Just t
@@ -91,13 +70,13 @@ data ASTF r
     = ASTLit Literal
     | ASTRecord Recursivity (Map.Map String r) [String]
     | ASTVar String
-    | ASTLet String (Maybe PType) r r
+    | ASTLet String (Maybe Type) r r
     | ASTLam [String] r
     | ASTField r String
     | ASTFun String [r]
     | ASTOp String r r
     | ASTUnit r UnitDef
-    | ASTTApp r PType
+    | ASTTApp r Type
     | ASTNull
     deriving (Show, Functor)
 deriveShow1 ''ASTF
@@ -115,7 +94,7 @@ data ExprF r
     = XAtom Atom
     | XRecord Recursivity (Map.Map String r) [String]
     | XFunApp r [r]
-    | XTypeApp r PType
+    | XTypeApp r Type
     | XUnitApp r UnitDef
     deriving (Show, Functor)
 deriveShow1 ''ExprF

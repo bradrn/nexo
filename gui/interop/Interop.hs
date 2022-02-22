@@ -17,11 +17,13 @@ import GHC.IO.Encoding (utf8)
 
 import qualified Data.Map.Strict as Map
 
+import Nexo.Core.Type hiding (CBool)
+import qualified Nexo.Core.Type as Core
 import Nexo.Expr.Parse
 import Nexo.Expr.Type
 import Nexo.Expr.Type.Annotated (delocalise)
 import Nexo.Interpret (Value(..), render)
-import Nexo.Render (renderType, renderMonomorphicType)
+import Nexo.Render (renderMonomorphicType, renderCoreType)
 import Nexo.Sheet
 import Nexo.Sheet.Parse (parseSheet)
 import Nexo.Sheet.Render (renderSheet)
@@ -58,7 +60,7 @@ hsParseTable clen cheader ctype cformula ccollen ccol successPtr = do
 
     ctypes <- peekArray (fromIntegral clen) ctype
     types <- traverse (traverse (GHC.peekCString utf8) <=< ptrToMaybe) ctypes
-    let ptypes = fmap (>>= parseMaybe pPType) types
+    let ptypes = fmap (>>= parseMaybe pType) types
 
     cformulae <- peekArray (fromIntegral clen) cformula
     formulae <- traverse (traverse (GHC.peekCString utf8) <=< ptrToMaybe) cformulae
@@ -91,23 +93,23 @@ hsParseTable clen cheader ctype cformula ccollen ccol successPtr = do
     mkColumnExpr _       (Just col) = Just $ Fix $ ASTFun "List" col
     mkColumnExpr Nothing Nothing    = Nothing
 
-    mkTypedColumn :: Maybe PType -> AST -> Maybe AST
+    mkTypedColumn :: Maybe Type -> AST -> Maybe AST
     mkTypedColumn Nothing  x = Just x
-    mkTypedColumn (Just (Forall ts us t)) x = Just $ Fix $ ASTTApp x (Forall ts us $ TList t)
+    mkTypedColumn (Just t) x = Just $ Fix $ ASTTApp x (TList t)
 
     mkColumnEither :: Maybe String -> [String] -> Either String [String]
     mkColumnEither (Just x) _ = Left x
     mkColumnEither Nothing  x = Right x
 
-hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
+hsMaybeParseType :: CString -> IO (StablePtr (Maybe Type))
 hsMaybeParseType cinput = do
     input <- GHC.peekCString utf8 cinput
-    newStablePtr $ parseMaybe pPType input
+    newStablePtr $ parseMaybe pType input
 
 hsNothing :: IO (StablePtr (Maybe a))
 hsNothing = newStablePtr Nothing
 
-hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr (AST, Widget) -> IO (StablePtr Cell)
+hsMkCell :: CString -> StablePtr (Maybe Type) -> StablePtr (AST, Widget) -> IO (StablePtr Cell)
 hsMkCell cname tptr xptr = do
     name <- GHC.peekCString utf8 cname
     type_ <- deRefStablePtr tptr
@@ -193,18 +195,20 @@ hsCellName :: StablePtr Cell -> IO CString
 hsCellName = GHC.newCString utf8 . cellName <=< deRefStablePtr
 
 hsCellType :: StablePtr Cell -> IO CString
-hsCellType = GHC.newCString utf8 . maybe "" renderType . cellType <=< deRefStablePtr
+hsCellType = GHC.newCString utf8 . maybe "" renderMonomorphicType . cellType <=< deRefStablePtr
 
 -- partial function - assumes that the column exists
 hsCellTypeOfColumn :: CString -> StablePtr Cell -> IO CString
 hsCellTypeOfColumn ccol ccell = do
     cell <- deRefStablePtr ccell
     col <- GHC.peekCString utf8 ccol
-    GHC.newCString utf8 $ maybe "" (renderMonomorphicType . typeAtColumn col) $ cellType cell
+    GHC.newCString utf8 $ case cellValue cell of
+        ValuePresent t _ -> renderCoreType $ typeAtColumn col t
+        _ -> ""
   where
-    typeAtColumn :: String -> PType -> Type
-    typeAtColumn col (Forall _ _ (TTable rec)) = rec Map.! col
-    typeAtColumn col (Forall _ _ (TRecord rec)) = rec Map.! col
+    typeAtColumn :: String -> PType -> CoreType
+    typeAtColumn col (Forall _ (CTable  rec)) = rec Map.! col
+    typeAtColumn col (Forall _ (CRecord rec)) = rec Map.! col
     typeAtColumn _ _ = error "hsCellTypeOfColumn: unknown column"
 
 hsParseSheet :: CString -> Ptr CBool -> IO (StablePtr (IORef Sheet))
@@ -228,16 +232,16 @@ hsDisplayError ptr = deRefStablePtr ptr >>= \case
 
 hsExtractTopLevelType :: StablePtr ValueState' -> IO CInt
 hsExtractTopLevelType ptr = deRefStablePtr ptr >>= \case
-    ValuePresent (Forall _ _ t) _ -> return $ case t of
-        TNum _ -> 1
-        TBool -> 2
-        TText -> 3
-        TVar _ -> 4
-        TList _ -> 5
-        TRecord _ -> 6
-        TFun _ _ -> 7
-        TTable _ -> 8
-        TUnit _ -> 0  -- shouldn't occur as a top-level type, treat as absent value if found
+    ValuePresent (Forall _ t) _ -> return $ case t of
+        CNum _ -> 1
+        Core.CBool -> 2
+        CText -> 3
+        CTVar _ -> 4
+        CList _ -> 5
+        CRecord _ -> 6
+        CFun _ _ -> 7
+        CTable _ -> 8
+        CUnit _ -> 0  -- shouldn't occur as a top-level type, treat as absent value if found
     _ -> return 0
 
 hsExtractValue :: StablePtr ValueState' -> IO (StablePtr Value')
@@ -280,9 +284,9 @@ foreign export ccall hsNewSheet :: IO (StablePtr (IORef Sheet))
 foreign export ccall hsParseExpr :: CString -> Ptr CBool -> IO (StablePtr (AST, Widget))
 foreign export ccall hsParseLiteralList :: CInt -> Ptr CString -> Ptr CBool -> IO (StablePtr (AST, Widget))
 foreign export ccall hsParseTable :: CInt -> Ptr CString -> Ptr (Ptr CString) -> Ptr (Ptr CString) -> Ptr CInt -> Ptr (Ptr CString) -> Ptr CBool -> IO (StablePtr (AST, Widget))
-foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe PType))
+foreign export ccall hsMaybeParseType :: CString -> IO (StablePtr (Maybe Type))
 foreign export ccall hsNothing :: IO (StablePtr (Maybe a))
-foreign export ccall hsMkCell :: CString -> StablePtr (Maybe PType) -> StablePtr (AST, Widget) -> IO (StablePtr Cell)
+foreign export ccall hsMkCell :: CString -> StablePtr (Maybe Type) -> StablePtr (AST, Widget) -> IO (StablePtr Cell)
 foreign export ccall hsInsert :: CInt -> StablePtr Cell -> StablePtr (IORef Sheet) -> IO ()
 foreign export ccall hsEvalSheet :: CString -> StablePtr (IORef Sheet) -> IO CBool
 foreign export ccall hsCellIndices :: StablePtr (IORef Sheet) -> Ptr CInt -> IO (Ptr CInt)
