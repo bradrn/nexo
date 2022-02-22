@@ -38,13 +38,13 @@ import qualified Data.Map.Strict as Map
 
 import Nexo.Core.Substitute
 import Nexo.Core.Typecheck
-import Nexo.Expr.Type
-import Nexo.Interpret
+import Nexo.Core.Type (PType, TypeError(UnknownName))
 import Nexo.Env (MonadScoped(..), MonadEnv(..), MonadSubst(..))
-import Nexo.Expr.Desugar
 import Nexo.Env.Std
 import Nexo.Error
-import Nexo.Core.Type
+import Nexo.Expr.Desugar
+import Nexo.Expr.Type (Type, AST, ASTF(ASTTApp))
+import Nexo.Interpret
 
 data ValueState e
     = ValuePresent PType (Value e)

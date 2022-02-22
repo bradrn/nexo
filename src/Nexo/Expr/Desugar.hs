@@ -44,19 +44,19 @@ topoSort = go . restrictToTable
             in Set.toList noDeps ++ go deps'
 
 desugarStep :: ASTF (Set String, Expr) -> Expr
-desugarStep (ASTLit lit) = Fix $ XAtom $ Lit lit
-desugarStep (ASTRecord rty r _ss) = Fix $ XRecord rty (snd <$> r) (topoSort $ fst <$> r)
-desugarStep (ASTVar s) = Fix $ XAtom $ Var s
-desugarStep (ASTLet v t (_, xv) (_, x)) = Fix $ XFunApp
-    (Fix $ XNamedFunApp "Lambda" [Fix $ XAtom $ Var v, x])
-    [maybe xv (Fix . XTypeApp xv) t]
-desugarStep (ASTLam args (_, x)) = Fix $ XNamedFunApp "Lambda" (fmap (Fix . XAtom . Var) args ++ [x])
-desugarStep (ASTField (_, x) f) = Fix $ XNamedFunApp "GetField" [x, Fix $ XAtom $ Var f]
-desugarStep (ASTFun f args) = Fix $ XNamedFunApp f (snd <$> args)
-desugarStep (ASTOp op (_, x1) (_, x2)) = Fix $ XNamedFunApp op [x1, x2]
-desugarStep (ASTUnit (_, x) u) = Fix $ XUnitApp x u
-desugarStep (ASTTApp (_, x) t) = Fix $ XTypeApp x t
-desugarStep ASTNull = Fix $ XAtom Null
+desugarStep (ASTLit lit) = Fix $ Atom $ Lit lit
+desugarStep (ASTRecord rty r _ss) = Fix $ Record rty (snd <$> r) (topoSort $ fst <$> r)
+desugarStep (ASTVar s) = Fix $ Atom $ Var s
+desugarStep (ASTLet v t (_, xv) (_, x)) = Fix $ FunApp
+    (Fix $ NamedFunApp "Lambda" [Fix $ Atom $ Var v, x])
+    [maybe xv (Fix . TypeApp xv) t]
+desugarStep (ASTLam args (_, x)) = Fix $ NamedFunApp "Lambda" (fmap (Fix . Atom . Var) args ++ [x])
+desugarStep (ASTField (_, x) f) = Fix $ NamedFunApp "GetField" [x, Fix $ Atom $ Var f]
+desugarStep (ASTFun f args) = Fix $ NamedFunApp f (snd <$> args)
+desugarStep (ASTOp op (_, x1) (_, x2)) = Fix $ NamedFunApp op [x1, x2]
+desugarStep (ASTUnit (_, x) u) = Fix $ UnitApp x u
+desugarStep (ASTTApp (_, x) t) = Fix $ TypeApp x t
+desugarStep ASTNull = Fix $ Atom Null
 
 desugar :: AST -> Expr
 desugar = zygo depends desugarStep

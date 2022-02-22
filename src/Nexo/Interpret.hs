@@ -25,7 +25,7 @@ import Data.Foldable (for_, traverse_)
 import Data.List (transpose, intercalate)
 
 import Nexo.Core.Type
-import Nexo.Expr.Type
+import Nexo.Expr.Type (Literal(..), Recursivity(..))
 import Nexo.Env
 
 data Value e
@@ -35,7 +35,7 @@ data Value e
     | VList [Value e]
     | VRecord (Map.Map String (Value e))
     | VTable (Map.Map String [Value e])
-    | VClosure e [String] CoreExpr
+    | VClosure e [String] Expr
     | VPrimClosure (PrimClosure e)
     | VNull
     deriving (Show)
@@ -74,9 +74,9 @@ render VPrimClosure{} = "λ…"
 render VNull = "—"
 
 fromLit :: Literal -> Value e
-fromLit (LNum n) = VNum n
-fromLit (LBool b) = VBool b
-fromLit (LText t) = VText t
+fromLit (Num n) = VNum n
+fromLit (Bool b) = VBool b
+fromLit (Text t) = VText t
 
 data RuntimeError
     = DimensionMismatch 
@@ -124,29 +124,29 @@ evalExpr
        , MonadScoped e f
        , MonadError RuntimeError f
        )
-    => CoreExpr -> f (Value e)
+    => Expr -> f (Value e)
 evalExpr = para \case
-    CLitF v -> pure $ fromLit v
-    CVarF name -> join $ lookupName name
-    CLetF v (_, vx) (_, x) -> scope $ do
+    LitF v -> pure $ fromLit v
+    VarF name -> join $ lookupName name
+    LetF v (_, vx) (_, x) -> scope $ do
         extend (v, vx)
         x
-    CLamF args (x, _) -> do
+    LamF args (x, _) -> do
         env <- getEnv
         pure $ VClosure env args x
-    CRecF Nonrecursive xs -> VRecord . Map.fromList <$> sequenceA (liftTuple' <$> xs)
-    CRecF Recursive xs -> scope $ do
+    RecF Nonrecursive xs -> VRecord . Map.fromList <$> sequenceA (liftTuple' <$> xs)
+    RecF Recursive xs -> scope $ do
         traverse_ extend $ second snd <$> xs
         xs' <- traverse (liftTuple . second snd) xs
         pure $ VRecord $ Map.fromList xs'
-    CTabF (_, vs') ->
+    TabF (_, vs') ->
         vs' >>= \case
             VRecord vs -> pure $ VTable $ getList <$> vs
             _ -> error "evalExpr.CTabF: bug in typechecker"
-    CAppF (_, fn) es -> do
+    AppF (_, fn) es -> do
         v <- fn
         broadcast (fromClosure v) =<< traverse liftTuple' es
-    CNullF -> pure VNull
+    NullF -> pure VNull
   where
     getList :: Value a -> [Value a]
     getList (VList vs) = vs

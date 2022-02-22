@@ -2,7 +2,7 @@
 
 module Nexo.Error where
 
-import Nexo.Core.Type (TypeError(..), Mismatch(..), Context(..), CoreExpr(CVar))
+import Nexo.Core.Type (TypeError(..), Mismatch(..), Context(..), Expr(Var))
 import Nexo.Interpret (RuntimeError(..))
 import Nexo.Render (renderCoreType)
 
@@ -34,7 +34,7 @@ renderTypeError (TypeMismatch ctx Mismatch{tSupplied, tDeclared}) =
       TypeSpecification -> ("The argument of a type specification", "the type specification says its type should be")
       ArgumentOfFunction e ->
           let e' = case e of
-                 CVar f -> "The expression " ++ f
+                 Var f -> "The expression " ++ f
                  _ -> "An unnamed expression"
           in (e' ++ ", used in a function application,", "the function used should satsify the following type")
       ListElement -> ("An element of a list", "the other elements of the list have type")

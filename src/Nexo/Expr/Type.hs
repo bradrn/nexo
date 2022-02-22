@@ -18,27 +18,27 @@ import qualified Data.Map.Strict as Map
 
 type TVar = String
 
-data UnitDef
+data Unit
     = ULeaf String
     | UFactor Double
-    | UMul UnitDef UnitDef
-    | UDiv UnitDef UnitDef
-    | UExp UnitDef Int
+    | UMul Unit Unit
+    | UDiv Unit Unit
+    | UExp Unit Int
     | UVar TVar
     deriving (Show, Ord)
 
-pattern Uno :: UnitDef
+pattern Uno :: Unit
 pattern Uno = UFactor 1
 
 -- | Warning! Unless you know what you’re doing, it’s probably better
 -- to use 'concords' (from 'Nexo.Expr.Unit') when comparing units
-deriving instance Eq UnitDef
+deriving instance Eq Unit
 
-makeBaseFunctor ''UnitDef
+makeBaseFunctor ''Unit
 
 -- | Data type listing all the types in Nexo
 data Type
-    = TNum UnitDef
+    = TNum Unit
     | TBool
     | TText
     | TVar TVar
@@ -58,9 +58,9 @@ meets :: [Type] -> Maybe Type
 meets = foldr (\val acc -> acc >>= meet val) =<< listToMaybe
 
 data Literal
-    = LNum Double
-    | LBool Bool
-    | LText String
+    = Num Double
+    | Bool Bool
+    | Text String
     deriving (Show, Eq)
 
 data Recursivity = Nonrecursive | Recursive
@@ -75,7 +75,7 @@ data ASTF r
     | ASTField r String
     | ASTFun String [r]
     | ASTOp String r r
-    | ASTUnit r UnitDef
+    | ASTUnit r Unit
     | ASTTApp r Type
     | ASTNull
     deriving (Show, Functor)
@@ -91,17 +91,17 @@ data Atom
     deriving (Show, Eq)
 
 data ExprF r
-    = XAtom Atom
-    | XRecord Recursivity (Map.Map String r) [String]
-    | XFunApp r [r]
-    | XTypeApp r Type
-    | XUnitApp r UnitDef
+    = Atom Atom
+    | Record Recursivity (Map.Map String r) [String]
+    | FunApp r [r]
+    | TypeApp r Type
+    | UnitApp r Unit
     deriving (Show, Functor)
 deriveShow1 ''ExprF
 deriveEq1 ''ExprF
 
-pattern XNamedFunApp :: String -> [Fix ExprF] -> ExprF (Fix ExprF)
-pattern XNamedFunApp f args = XFunApp (Fix (XAtom (Var f))) args
+pattern NamedFunApp :: String -> [Fix ExprF] -> ExprF (Fix ExprF)
+pattern NamedFunApp f args = FunApp (Fix (Atom (Var f))) args
 
 type Expr = Fix ExprF
 

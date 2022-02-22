@@ -15,94 +15,94 @@ import Data.List (intercalate)
 import qualified Control.Monad.Trans.Free as TF
 import qualified Data.Map as Map
 
-import Nexo.Core.Type
-import Nexo.Expr.Type
+import qualified Nexo.Core.Type as Core
+import qualified Nexo.Expr.Type as Expr
 
-renderStep :: ASTF String -> String
-renderStep (ASTLit lit) = renderLit lit
-renderStep (ASTRecord r rec ss) =
+renderStep :: Expr.ASTF String -> String
+renderStep (Expr.ASTLit lit) = renderLit lit
+renderStep (Expr.ASTRecord r rec ss) =
     let r' = case r of
-            Recursive -> "rec"
-            Nonrecursive -> ""
+            Expr.Recursive -> "rec"
+            Expr.Nonrecursive -> ""
     in r' ++ '(' : intercalate ", " (pickElFromMap rec <$> ss) ++ ")"
   where
     pickElFromMap :: Map.Map String String -> String -> String
     pickElFromMap m k =
         let v = m Map.! k
         in k ++ ": " ++ v
-renderStep (ASTVar s) = s
-renderStep (ASTLet k t' v x) = case t' of
+renderStep (Expr.ASTVar s) = s
+renderStep (Expr.ASTLet k t' v x) = case t' of
     Just t  -> "Let(" ++ k ++ " : " ++ renderMonomorphicType t ++ ", " ++ v ++ ", " ++ x ++ ")"
     Nothing -> "Let(" ++ k ++                          ", " ++ v ++ ", " ++ x ++ ")"
-renderStep (ASTLam vs x) = "(" ++ intercalate ", " vs ++ ") -> " ++ x
-renderStep (ASTField s str) = '(' : s ++ ")." ++ str
-renderStep (ASTFun s ss) = s ++ "(" ++ intercalate ", " ss ++ ")"
-renderStep (ASTOp op x1 x2) = '(' : x1 ++ ") " ++ op ++ " (" ++ x2 ++ ")"
-renderStep (ASTUnit s u) = "(" ++ s ++ ") " ++ renderUnit u
-renderStep (ASTTApp s t) = "(" ++ s ++ ") : " ++ renderMonomorphicType t
-renderStep ASTNull = "Null"
+renderStep (Expr.ASTLam vs x) = "(" ++ intercalate ", " vs ++ ") -> " ++ x
+renderStep (Expr.ASTField s str) = '(' : s ++ ")." ++ str
+renderStep (Expr.ASTFun s ss) = s ++ "(" ++ intercalate ", " ss ++ ")"
+renderStep (Expr.ASTOp op x1 x2) = '(' : x1 ++ ") " ++ op ++ " (" ++ x2 ++ ")"
+renderStep (Expr.ASTUnit s u) = "(" ++ s ++ ") " ++ renderUnit u
+renderStep (Expr.ASTTApp s t) = "(" ++ s ++ ") : " ++ renderMonomorphicType t
+renderStep Expr.ASTNull = "Null"
 
-renderUnit :: UnitDef -> String
-renderUnit (ULeaf s) = s
-renderUnit (UFactor x) = show x
-renderUnit (UMul u1 u2) = '(' : renderUnit u1 ++ ' ' : renderUnit u2 ++ ")"
-renderUnit (UDiv u1 u2) = '(' : renderUnit u1 ++ '/' : renderUnit u2 ++ ")"
-renderUnit (UExp u@(ULeaf _) n)   = renderUnit u ++ '^' : show n
-renderUnit (UExp u@(UFactor _) n) = renderUnit u ++ '^' : show n
-renderUnit (UExp u@(UVar _) n)    = renderUnit u ++ '^' : show n
-renderUnit (UExp u n) = '(' : renderUnit u ++ ")^" ++ show n
-renderUnit (UVar v) = '\'' : v
+renderUnit :: Expr.Unit -> String
+renderUnit (Expr.ULeaf s) = s
+renderUnit (Expr.UFactor x) = show x
+renderUnit (Expr.UMul u1 u2) = '(' : renderUnit u1 ++ ' ' : renderUnit u2 ++ ")"
+renderUnit (Expr.UDiv u1 u2) = '(' : renderUnit u1 ++ '/' : renderUnit u2 ++ ")"
+renderUnit (Expr.UExp u@(Expr.ULeaf _) n)   = renderUnit u ++ '^' : show n
+renderUnit (Expr.UExp u@(Expr.UFactor _) n) = renderUnit u ++ '^' : show n
+renderUnit (Expr.UExp u@(Expr.UVar _) n)    = renderUnit u ++ '^' : show n
+renderUnit (Expr.UExp u n) = '(' : renderUnit u ++ ")^" ++ show n
+renderUnit (Expr.UVar v) = '\'' : v
 
-renderCoreUnit :: Unit -> String
+renderCoreUnit :: Core.Unit -> String
 renderCoreUnit (f, ds) =
     let rendered = Map.foldMapWithKey renderDimension ds
     in unwords $
        if f == 1 then rendered else show f : rendered
   where
-    renderDimension :: Either String CoreVar -> Int -> [String]
-    renderDimension (Left u ) 1                = [       u                ]
-    renderDimension (Left u ) x                = [       u ++ '^' : show x]
-    renderDimension (Right (Rigid v)) 1        = ['\'' : v                ]
-    renderDimension (Right (Rigid v)) x        = ['\'' : v ++ '^' : show x]
-    renderDimension (Right (Undetermined v)) 1 = ['\'' : v                ]
-    renderDimension (Right (Undetermined v)) x = ['\'' : v ++ '^' : show x]
+    renderDimension :: Either String Core.TVar -> Int -> [String]
+    renderDimension (Left u ) 1                     = [       u                ]
+    renderDimension (Left u ) x                     = [       u ++ '^' : show x]
+    renderDimension (Right (Core.Rigid v)) 1        = ['\'' : v                ]
+    renderDimension (Right (Core.Rigid v)) x        = ['\'' : v ++ '^' : show x]
+    renderDimension (Right (Core.Undetermined v)) 1 = ['\'' : v                ]
+    renderDimension (Right (Core.Undetermined v)) x = ['\'' : v ++ '^' : show x]
 
-renderType :: PType -> String
-renderType (Forall _ts t) = renderCoreType t
+renderType :: Core.PType -> String
+renderType (Core.Forall _ts t) = renderCoreType t
 
-renderCoreType :: CoreType -> String
+renderCoreType :: Core.Type -> String
 renderCoreType = \case
-    CNum t -> "Num<" ++ renderCoreType t ++ ">"
-    CBool -> "Bool"
-    CText -> "Text"
-    CTVar (Rigid v) -> '\'' : v
-    CTVar (Undetermined v) -> '\'' : v
-    CFun vs x -> "(" ++ intercalate ", " (renderCoreType <$> vs) ++ ") -> " ++ renderCoreType x
-    CList a -> "List(" ++ renderCoreType a ++ ")"
-    CRecord rec -> '(' : intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderCoreType v]) rec) ++ ")"
-    CTable rec -> "Table(" ++ intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderCoreType v]) rec) ++ ")"
-    CUnit u -> renderCoreUnit u
+    Core.TNum t -> "Num<" ++ renderCoreType t ++ ">"
+    Core.TBool -> "Bool"
+    Core.TText -> "Text"
+    Core.TVar (Core.Rigid v) -> '\'' : v
+    Core.TVar (Core.Undetermined v) -> '\'' : v
+    Core.TFun vs x -> "(" ++ intercalate ", " (renderCoreType <$> vs) ++ ") -> " ++ renderCoreType x
+    Core.TList a -> "List(" ++ renderCoreType a ++ ")"
+    Core.TRecord rec -> '(' : intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderCoreType v]) rec) ++ ")"
+    Core.TTable rec -> "Table(" ++ intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderCoreType v]) rec) ++ ")"
+    Core.TUnit u -> renderCoreUnit u
 
-renderMonomorphicType :: Type -> String
+renderMonomorphicType :: Expr.Type -> String
 renderMonomorphicType = \case
-    TNum t -> "Num<" ++ renderUnit t ++ ">"
-    TBool -> "Bool"
-    TText -> "Text"
-    TVar v -> '\'' : v
-    TFun vs x -> "(" ++ intercalate ", " (renderMonomorphicType <$> vs) ++ ") -> " ++ renderMonomorphicType x
-    TList a -> "List(" ++ renderMonomorphicType a ++ ")"
-    TRecord rec -> '(' : intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderMonomorphicType v]) rec) ++ ")"
-    TTable rec -> "Table(" ++ intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderMonomorphicType v]) rec) ++ ")"
+    Expr.TNum t -> "Num<" ++ renderUnit t ++ ">"
+    Expr.TBool -> "Bool"
+    Expr.TText -> "Text"
+    Expr.TVar v -> '\'' : v
+    Expr.TFun vs x -> "(" ++ intercalate ", " (renderMonomorphicType <$> vs) ++ ") -> " ++ renderMonomorphicType x
+    Expr.TList a -> "List(" ++ renderMonomorphicType a ++ ")"
+    Expr.TRecord rec -> '(' : intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderMonomorphicType v]) rec) ++ ")"
+    Expr.TTable rec -> "Table(" ++ intercalate "," (Map.foldMapWithKey (\k v -> [k ++ ": " ++ renderMonomorphicType v]) rec) ++ ")"
 
-renderLit :: Literal -> String
-renderLit (LNum x) = show x
-renderLit (LBool b) = show b
-renderLit (LText s) = show s
+renderLit :: Expr.Literal -> String
+renderLit (Expr.Num x) = show x
+renderLit (Expr.Bool b) = show b
+renderLit (Expr.Text s) = show s
 
-renderExpr :: AST -> String
+renderExpr :: Expr.AST -> String
 renderExpr = cata renderStep
 
-renderPartialExpr :: Free ASTF String -> String
+renderPartialExpr :: Free Expr.ASTF String -> String
 renderPartialExpr = cata $ \case
    TF.Pure s -> s
    TF.Free x -> renderStep x

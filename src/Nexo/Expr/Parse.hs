@@ -60,7 +60,7 @@ pOrderedRecordSpec p = fmap fromListWithOrder $
 pRecursivity :: Parser Recursivity
 pRecursivity = (Recursive <$ symbol "rec") <|> pure Nonrecursive
 
-pUnit :: Parser UnitDef
+pUnit :: Parser Unit
 pUnit = do
     f <- withExp
     UDiv f <$> (symbol "/" *> pUnit)
@@ -77,7 +77,7 @@ pUnit = do
         <|> UVar <$> (char '\'' *> pIdentifier)
         <|> paren pUnit
 
-pUnitType :: Parser UnitDef
+pUnitType :: Parser Unit
 pUnitType =
     between (symbol "<") (symbol ">")
         (pUnit <|> UVar <$> (char '\'' *> pIdentifier))
@@ -105,9 +105,9 @@ pType = do
     pNoArgFun = TFun [] <$ symbol "(" <* symbol ")" <* symbol "->" <*> pType
 
 pLit :: Parser Literal
-pLit = LNum <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
-    <|> LBool <$> pBool
-    <|> LText <$> lexeme pString
+pLit = Num <$> lexeme (L.signed sc $ try L.float <|> L.decimal)
+    <|> Bool <$> pBool
+    <|> Text <$> lexeme pString
   where
     pBool = True <$ symbol "True" <|> False <$ symbol "False"
 

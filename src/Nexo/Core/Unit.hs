@@ -6,43 +6,42 @@ module Nexo.Core.Unit where
 
 import Control.Applicative (liftA2)
 import Data.Bifunctor (second)
+import Data.Functor ((<&>))
 import Data.Functor.Foldable (cata)
 
 import qualified Data.Map.Strict as Map
 
-import Nexo.Expr.Type
-import Data.Functor ((<&>))
-
-import Nexo.Core.Type
+import qualified Nexo.Expr.Type as Expr
+import qualified Nexo.Core.Type as Core
 
 -- | If the first unit can be converted to the second unit, returns
 -- the conversion factor from the second to the first; else returns
 -- 'Nothing'.
-concord :: Unit -> Unit -> Maybe Double
+concord :: Core.Unit -> Core.Unit -> Maybe Double
 concord u@(f, u') v@(g, v')
     | u == v = Just 1
     | u' == v' = Just (f/g)
     | otherwise = Nothing
 
-simplify :: UnitDef -> Either TypeError Unit
+simplify :: Expr.Unit -> Either Core.TypeError Core.Unit
 simplify = fmap (second $ Map.filter (/=0)) . cata \case
-    ULeafF l -> case expandName l of
+    Expr.ULeafF l -> case expandName l of
         Just x -> Right x
         Nothing -> case lookupPrefix l of
-            Just (l', f) -> maybe (Left $ UnknownName l) Right $
+            Just (l', f) -> maybe (Left $ Core.UnknownName l) Right $
                 expandName l' <&> \(g, v) -> (f*g, v)
-            Nothing -> Left $ UnknownName l
-    UFactorF f -> Right (f, Map.empty)
-    UMulF u v -> liftA2 mul u v
-    UDivF u v -> liftA2 div' u v
-    UExpF u x -> exp' x <$> u
-    UVarF v -> Right (1, Map.singleton (Right $ Rigid v) 1)
+            Nothing -> Left $ Core.UnknownName l
+    Expr.UFactorF f -> Right (f, Map.empty)
+    Expr.UMulF u v -> liftA2 mul u v
+    Expr.UDivF u v -> liftA2 div' u v
+    Expr.UExpF u x -> exp' x <$> u
+    Expr.UVarF v -> Right (1, Map.singleton (Right $ Core.Rigid v) 1)
   where
     mul (f, u) (g, v) = (f*g, Map.unionWith (+) u v)
     div' (f, u) (g, v) = (f/g, Map.unionWith (+) u $ negate <$> v)
     exp' x (f, u) = (f^^x, (*x) <$> u)
 
-expandName :: String -> Maybe (Double, Map.Map (Either String CoreVar) Int)
+expandName :: String -> Maybe (Double, Map.Map (Either String Core.TVar) Int)
 expandName "s"   = Just (1, Map.singleton (Left "s") 1)
 expandName "m"   = Just (1, Map.singleton (Left "m") 1)
 expandName "g"   = Just (1, Map.singleton (Left "g") 1)
