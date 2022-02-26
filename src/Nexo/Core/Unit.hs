@@ -1,10 +1,13 @@
-{-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE LambdaCase     #-}
-{-# LANGUAGE TypeFamilies   #-}
+{-# LANGUAGE BlockArguments   #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase       #-}
+{-# LANGUAGE TypeFamilies     #-}
 
 module Nexo.Core.Unit where
 
 import Control.Applicative (liftA2)
+import Control.Monad.Except (MonadError(throwError))
+import Control.Monad.State.Strict (StateT, gets, modify, evalStateT)
 import Data.Bifunctor (second)
 import Data.Functor ((<&>))
 import Data.Functor.Foldable (cata)
@@ -23,19 +26,27 @@ concord u@(f, u') v@(g, v')
     | u' == v' = Just (f/g)
     | otherwise = Nothing
 
-simplify :: Expr.Unit -> Either Core.TypeError Core.Unit
-simplify = fmap (second $ Map.filter (/=0)) . cata \case
+simplify :: MonadError Core.TypeError m => Expr.Unit -> m Core.Unit
+simplify = flip evalStateT Map.empty . inferUnit
+
+inferUnit :: MonadError Core.TypeError m => Expr.Unit -> StateT (Map.Map String Core.Kind) m Core.Unit
+inferUnit = fmap (second $ Map.filter (/=0)) . cata \case
     Expr.ULeafF l -> case expandName l of
-        Just x -> Right x
+        Just x -> pure x
         Nothing -> case lookupPrefix l of
-            Just (l', f) -> maybe (Left $ Core.UnknownName l) Right $
+            Just (l', f) -> maybe (throwError $ Core.UnknownName l) pure $
                 expandName l' <&> \(g, v) -> (f*g, v)
-            Nothing -> Left $ Core.UnknownName l
-    Expr.UFactorF f -> Right (f, Map.empty)
+            Nothing -> throwError $ Core.UnknownName l
+    Expr.UFactorF f -> pure (f, Map.empty)
     Expr.UMulF u v -> liftA2 mul u v
     Expr.UDivF u v -> liftA2 div' u v
     Expr.UExpF u x -> exp' x <$> u
-    Expr.UVarF v -> Right (1, Map.singleton (Right $ Core.Rigid v) 1)
+    Expr.UVarF v ->
+        let result = (1, Map.singleton (pure $ Core.Rigid v) 1)
+        in gets (Map.lookup v) >>= \case
+            Nothing -> result <$ modify (Map.insert v Core.Unit)
+            Just Core.Unit -> pure result
+            Just _ -> throwError Core.KindMismatch
   where
     mul (f, u) (g, v) = (f*g, Map.unionWith (+) u v)
     div' (f, u) (g, v) = (f/g, Map.unionWith (+) u $ negate <$> v)

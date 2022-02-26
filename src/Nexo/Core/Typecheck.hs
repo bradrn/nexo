@@ -19,6 +19,7 @@ import Data.Traversable (for)
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Merge.Strict as Map
 
+import qualified Nexo.Core.Kind as Kind
 import Nexo.Core.Solve
 import Nexo.Core.Substitute
 import Nexo.Core.Type
@@ -276,21 +277,23 @@ inferStep = \case
                 Mismatch { tSupplied = t, tDeclared = TNum tUno }
         _ <- whenJustElse e $ unify (Subtype t (TNum tUno))
 
-        u' <- whenRightElse id $ simplify u
+        u' <- simplify u
 
         case getConversion t (TNum tUno) of
             UnliftBy n _ -> pure (x, liftBy n $ TNum $ TUnit u')
             _            -> pure (x, TNum $ TUnit u')
-    Expr.TypeApp (orig, x') ty -> do
-        t' <- whenRightElse id $ instantiateRigid ty
-        (x, t) <- x'
-        let e = TypeMismatch TypeSpecification $
-                Mismatch { tSupplied = t, tDeclared = t' }
-        s <- whenJustElse e $ unify (Unify t t')
+    Expr.TypeApp (orig, x') ty ->
+        Kind.infer ty >>= \case
+            (t', Type) -> do
+                (x, t) <- x'
+                let e = TypeMismatch TypeSpecification $
+                        Mismatch { tSupplied = t, tDeclared = t' }
+                s <- whenJustElse e $ unify (Unify t t')
 
-        ((_0, xConverted), _) <- getConvertedExpr s (orig, (x, t)) t'
-        applyToEnv s
-        pure (xConverted, t')
+                ((_0, xConverted), _) <- getConvertedExpr s (orig, (x, t)) t'
+                applyToEnv s
+                pure (xConverted, t')
+            _ -> throwError KindMismatch
 
 typecheck
     :: ( MonadEnv PType f

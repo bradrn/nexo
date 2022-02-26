@@ -17,8 +17,6 @@ import qualified Data.Map.Merge.Strict as Map
 import qualified Data.Set as Set
 
 import Nexo.Core.Type  -- most frequent, so don't qualify
-import Nexo.Core.Unit (simplify)
-import qualified Nexo.Expr.Type as Expr
 
 type Subst = Map.Map String (Either Type Unit)
 
@@ -147,16 +145,6 @@ instantiate (Forall vs t) = do
         Right (Rigid v)
             | Just v' <- lookup v vs' -> Right v'
         x -> x
-
-instantiateRigid :: Expr.Type -> Either TypeError Type
-instantiateRigid (Expr.TNum u) = TNum . TUnit <$> simplify u
-instantiateRigid Expr.TBool = Right TBool
-instantiateRigid Expr.TText = Right TText
-instantiateRigid (Expr.TVar s) = Right $ TVar $ Rigid s
-instantiateRigid (Expr.TFun as x) = TFun <$> traverse instantiateRigid as <*> instantiateRigid x
-instantiateRigid (Expr.TList t) = TList <$> instantiateRigid t
-instantiateRigid (Expr.TRecord m) = TRecord <$> traverse instantiateRigid m
-instantiateRigid (Expr.TTable m) = TTable <$> traverse instantiateRigid m
 
 generalise :: Type -> PType
 generalise t =

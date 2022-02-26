@@ -31,6 +31,12 @@ data TVar
                            -- ideally this would be in a separate type, but this seems easier
     deriving (Show, Eq, Ord)
 
+data Kind
+    = Type
+    | Unit
+    | KVar String
+    deriving (Show, Eq, Ord)
+
 -- | A unit in simplified representation: a factor multiplied by a map
 -- from base units ('Left' case) or type variables ('Right' case) to
 -- exponents.
