@@ -1,0 +1,3 @@
+packages: ./nexo.cabal
+          ./gui/interop/nexo-interop.cabal
+with-compiler: ghc-8.10.7
