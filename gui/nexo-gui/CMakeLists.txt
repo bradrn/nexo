@@ -17,7 +17,7 @@ find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets LinguistTools REQUIRED)
 set(NEXO_INTEROP_DIR ${CMAKE_CURRENT_LIST_DIR}/../interop/ CACHE PATH "Path to interop directory of Nexo source code")
 find_program(HAS_GHCUP "ghcup")
 if(HAS_GHCUP)
-    execute_process(COMMAND ghcup run -- sh -c "dirname $(cut -d ' ' -f 3 < $(which ghc).shim)" OUTPUT_VARIABLE GHC_BIN_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND ghcup whereis -d ghc OUTPUT_VARIABLE GHC_BIN_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
 else() # try Stack if no GHCup
     execute_process(COMMAND stack path --compiler-bin OUTPUT_VARIABLE GHC_BIN_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
