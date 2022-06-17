@@ -27,6 +27,7 @@ A brief summary of what each field currently means:
 ## Building and running Nexo
 
 Nexo is built using Haskell and C++, with the Qt GUI library.
+(The basic architecture is described [elsewhere](https://github.com/bradrn/brassica/blob/d6ebb3c933d6e6a88c725df4ffd1afe9e96c6829/ARCHITECTURE.md).)
 To compile the Haskell code, run `stack build` or `cabal build nexo && cabal build nexo-interop`.
 Then open `./gui/nexo-gui/CMakeLists.txt` in Qt Creator.
 You should then be able to build and run the GUI like any other Qt program.
