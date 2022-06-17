@@ -1,11 +1,36 @@
 # Nexo
 
-## Tips and Tricks and how to compile our code
+Nexo aims to be a new type of spreadsheet with an emphasis on ease of use, maintainability and correctness.
+It combines strongly-typed values and first-class unit support with an array-based and functional formula language,
+  making usage significantly more ergonomic than for a traditional spreadsheet environment.
 
-To compile the Haskell code, just run `stack build`.
+**Warning:** Nexo is currently at the very earliest stages of development.
+It is currently suitable only for the simplest of tasks, and all parts of the application have significant bugs.
+Development is continuing.
+
+
+## Screenshot
+
+![Sample screenshot of Nexo](screenshot.png)
+
+A brief summary of what each field currently means:
+
+| Field name | Contents |
+| --- | --- |
+| Name | Name of value |
+| Header | Name of table column |
+| Type | Inferred (grey) or given (black) type of value |
+| Expr | Expression in formula language yielding a single value (eg. `1+1` or `Mean([1,5,10])` or `If(1=1,10,20)`) |
+| Formula | Expression in formula language yielding a list of values; can refer to other columns in same table |
+| Value | Result of evaluating the Expr |
+
+## Building and running Nexo
+
+Nexo is built using Haskell and C++, with the Qt GUI library.
+To compile the Haskell code, run `stack build` or `cabal build nexo && cabal build nexo-interop`.
 Then open `./gui/nexo-gui/CMakeLists.txt` in Qt Creator.
 You should then be able to build and run the GUI like any other Qt program.
-You can also run the interactive interpreter on the Haskell code alone by running `stack ghci nexo:lib`.
+You can also run the interactive interpreter on the Haskell code alone by running `stack ghci nexo:lib` or `cabal repl lib:nexo`.
 
 ### Troubleshooting compiler errors
 
@@ -26,15 +51,4 @@ stack build regex-posix-0.96.0.0 --flag regex-posix:_regex-posix-clib --resolver
 
 (The first command can sometimes give an error. This error is safe to ignore; simply continue on with the second command.)
 
-After running the two commands above, commands such as `stack build` or `stack run` should complete successfully and without error.
-
-## How to run the UI
-
-Here are the fields in the GUI:
-
-| Field name | Contents |
-| --- | --- |
-| Name | Name of variable |
-| Type | Type of variable (e.g. `TNum`, `TBool`, `TList(something)`) |
-| Expr | eg. `1+1` or `Mean([1,5,10])` or `If(1=1,10,20)` |
-| Value | Result returned |
+After running the two commands above, commands such as `stack build` should complete successfully and without error.
